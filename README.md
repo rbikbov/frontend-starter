@@ -9,9 +9,21 @@ Vitest 5, MSW 3, Playwright 1.64, Tailwind 4.3, pnpm 10, Node 22.
 
 ## Новый проект
 
+Из шаблона на GitHub (репозиторий помечен как template):
+
+```bash
+gh repo create <project> --template rbikbov/frontend-starter --private --clone
+cd <project>
+pnpm install             # ставит и git-хуки: репозиторий уже есть
+cp .env.example .env.local
+pnpm dev
+```
+
+Без GitHub — копией папки:
+
 ```bash
 rsync -a --exclude node_modules --exclude .next --exclude test-results \
-  --exclude playwright-report --exclude .env.local \
+  --exclude playwright-report --exclude .env.local --exclude .git \
   ~/pet/frontend-starter/ ~/pet/<project>/
 cd ~/pet/<project>
 git init                 # до pnpm install: husky ставит хуки только в git-репозиторий
@@ -27,7 +39,7 @@ pnpm dev
    продукту.
 3. Лишние скиллы из `.claude/skills/` удали (что можно удалять — `.claude/skills/README.md`).
 4. Главную страницу (`src/_pages/home`) замени первой фичей — по процессу ниже.
-5. Первый коммит: `git add -A && git commit -m "chore: scaffold from frontend-starter"`.
+5. Коммит: `git add -A && git commit -m "chore: set up project from frontend-starter"`.
 
 ## Что внутри
 
