@@ -1,18 +1,18 @@
-# Задачи: <название фичи>
+# Tasks: <feature name>
 
-Спецификация: [spec.md](./spec.md)
+Spec: [spec.md](./spec.md)
 
-<!-- Одна задача — один коммит, после которого проверки проходят. Первая — tracer bullet. -->
+<!-- One task, one commit, after which the checks pass. The first one is a tracer bullet. -->
 
-- [ ] **1. Tracer bullet:** <один сценарий насквозь: маршрут → страница → данные → экран>
-      Готово, когда: <что видно в браузере>
+- [ ] **1. Tracer bullet:** <one scenario end to end: route → page → data → screen>
+      Done when: <what is visible in the browser>
 - [ ] **2. …**
-      Готово, когда: …
+      Done when: …
 
-## Журнал
+## Log
 
-<!-- Коротко: находки исследования, решения, тупики и откаты. Новая сессия начинается с чтения этого файла. -->
+<!-- Briefly: research findings, decisions, dead ends and rollbacks. A new session starts by reading this file. -->
 
-## Потом
+## Later
 
-<!-- Всё, что всплыло вне задач. В текущие коммиты не попадает. -->
+<!-- Anything that came up outside the tasks. It doesn't go into the current commits. -->

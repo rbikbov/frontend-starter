@@ -1,36 +1,36 @@
-# ADR-0001: Фундамент фронтенда
+# ADR-0001: Frontend foundation
 
-Статус: принято · Дата: <дата создания проекта> · Автор: <имя>
+Status: accepted · Date: <project creation date> · Author: <name>
 
-## Контекст
+## Context
 
-Проект стартует из шаблона `frontend-starter`. Решения ниже приняты в шаблоне по
-умолчанию; при старте проверь, подходят ли они продукту, и перепиши этот ADR, если нет.
+The project starts from the `frontend-starter` template. The decisions below are the template
+defaults; at project start check whether they fit the product, and rewrite this ADR if not.
 
-## Решения
+## Decisions
 
-| Вопрос           | Решение                                                                                                                                                                   | Когда пересмотреть                           |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| Фреймворк        | Next.js 16 (App Router), `cacheComponents` и `partialPrefetching` включены, как в `create-next-app`                                                                       | Нет SEO, SSR и BFF — подойдёт Vite SPA       |
-| Архитектура      | FSD: маршруты в корневом `app/`, слои в `src/` (`_app`, `_pages` — с префиксом, чтобы не путать со служебными папками Next). Границы проверяет `eslint-plugin-boundaries` | —                                            |
-| Серверные данные | `request()` + схемы zod на границе, `AppError` с `kind`; TanStack Query для клиентских данных                                                                             | —                                            |
-| Стили            | Tailwind v4, токены — CSS-переменные с именами как в shadcn/ui                                                                                                            | —                                            |
-| Тесты            | Vitest + Testing Library + MSW; e2e — Playwright против продакшен-сборки                                                                                                  | —                                            |
-| Тексты           | Строки в компонентах, без i18n                                                                                                                                            | Появилась вторая локаль — до неё, а не после |
-| Монорепо         | Нет                                                                                                                                                                       | Появилось второе приложение или общий пакет  |
-| Авторизация      | Нет; когда понадобится — по скиллу `frontend-auth-session`                                                                                                                | Первая защищённая страница                   |
-| Мониторинг       | Порт логгера в `shared/lib`, реализация в `_app` (console)                                                                                                                | Первый деплой: подключить сервис ошибок      |
+| Question     | Decision                                                                                                                                                                           | When to revisit                                |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Framework    | Next.js 16 (App Router), `cacheComponents` and `partialPrefetching` enabled, as in `create-next-app`                                                                               | No SEO, SSR or BFF — a Vite SPA would do       |
+| Architecture | FSD: routes in the root `app/`, layers in `src/` (`_app`, `_pages` — prefixed so they aren't confused with Next's special folders). `eslint-plugin-boundaries` enforces boundaries | —                                              |
+| Server data  | `request()` + zod schemas at the boundary, `AppError` with `kind`; TanStack Query for client data                                                                                  | —                                              |
+| Styles       | Tailwind v4, tokens as CSS variables named as in shadcn/ui                                                                                                                         | —                                              |
+| Tests        | Vitest + Testing Library + MSW; e2e with Playwright against a production build                                                                                                     | —                                              |
+| Copy         | Strings in components, no i18n                                                                                                                                                     | A second locale appears — before it, not after |
+| Monorepo     | pnpm workspaces: `apps/web` (Next.js) and `apps/api` (NestJS), no task orchestrator                                                                                                | CI builds become slow — Turborepo              |
+| Auth         | None; when needed, follow the `frontend-auth-session` skill                                                                                                                        | First protected page                           |
+| Monitoring   | Logger port in `shared/lib`, implementation in `_app` (console)                                                                                                                    | First deploy: connect an error service         |
 
-## Альтернативы
+## Alternatives
 
-| Вариант                                    | Почему не выбран                                                                                    |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `src/app` для маршрутов и FSD-слой `pages` | Next ищет служебные `app/` и `pages/` и в `src`: папка `src/pages` легко становится вторым роутером |
-| Steiger вместо `eslint-plugin-boundaries`  | Отдельный инструмент вне ESLint; префиксы `_app`/`_pages` требуют настройки                         |
-| Моки бэкенда как «тип бэкенда» в конфиге   | Не нужны без второго потребителя; в тестах сеть подменяет MSW                                       |
+| Option                                        | Why not chosen                                                                                               |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `src/app` for routes and an FSD `pages` layer | Next also looks for special `app/` and `pages/` folders in `src`: `src/pages` easily becomes a second router |
+| Steiger instead of `eslint-plugin-boundaries` | A separate tool outside ESLint; the `_app`/`_pages` prefixes need extra configuration                        |
+| Backend mocks as a "backend type" in config   | Not needed without a second consumer; MSW replaces the network in tests                                      |
 
-## Последствия
+## Consequences
 
-- Новый код раскладывается по правилам с первого коммита; нарушения границ ловит линтер и CI.
-- Next 16 меняется быстро: факты о нём агенты берут из `node_modules/next/dist/docs/`, а не из памяти.
-- Строки без i18n дешевле сейчас и дороже при второй локали — решение надо пересмотреть заранее.
+- New code is laid out by the rules from the first commit; the linter and CI catch boundary violations.
+- Next 16 changes quickly: agents take facts about it from `node_modules/next/dist/docs/`, not from memory.
+- Strings without i18n are cheaper now and costlier with a second locale — revisit the decision ahead of time.

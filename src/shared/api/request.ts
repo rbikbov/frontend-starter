@@ -3,9 +3,9 @@ import { z } from "zod";
 import { AppError, type AppErrorKind } from "./app-error";
 
 export type RequestOptions<T> = Omit<RequestInit, "body"> & {
-  /** Схема ответа: данные не по контракту — ошибка, а не тихий undefined в UI. */
+  /** Response schema: data that breaks the contract is an error, not a silent undefined in the UI. */
   schema: z.ZodType<T>;
-  /** Сериализуется в JSON. */
+  /** Serialized to JSON. */
   body?: unknown;
 };
 
@@ -27,7 +27,7 @@ export async function request<T>(
     throw new AppError("network", "Network error", { cause: error });
   }
 
-  // Тело бывает пустым или не JSON (HTML от прокси) — статус при этом терять нельзя.
+  // The body may be empty or not JSON (HTML from a proxy) — the status must not be lost.
   const payload: unknown = await response.json().catch(() => undefined);
 
   if (!response.ok) {
@@ -59,7 +59,7 @@ function kindFromStatus(status: number): AppErrorKind {
   return "unknown";
 }
 
-// Формат тела ошибки — договорённость с бэкендом. Поменяй схему под свой контракт.
+// The error body format is an agreement with the backend. Change the schema to match your contract.
 const ErrorBodySchema = z.object({
   fieldErrors: z.record(z.string(), z.string()).optional(),
 });

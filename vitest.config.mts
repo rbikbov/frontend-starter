@@ -9,7 +9,7 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     restoreMocks: true,
-    // значения для модулей, которые валидируют env при импорте
+    // values for modules that validate env on import
     env: { NEXT_PUBLIC_APP_URL: "http://localhost:3000" },
   },
 });

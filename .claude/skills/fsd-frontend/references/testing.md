@@ -1,61 +1,61 @@
-# Тестирование
+# Testing
 
-Примеры — Vitest, Testing Library, user-event, MSW, TanStack Query. Для Jest
-и других раннеров принципы те же.
+Examples use Vitest, Testing Library, user-event, MSW, TanStack Query. The
+principles are the same for Jest and other runners.
 
-## Содержание
+## Contents
 
-1. Принципы
-2. Что тестировать на каждом уровне
-3. Инфраструктура: setup, тестовые провайдеры, MSW
-4. Фейки и билдеры данных: `testing.ts`
-5. Чистые функции
-6. Сторы и сервисы с зависимостями
-7. Компоненты и хуки слайса
-8. Серверные данные
-9. Страница и адаптеры
-10. Чего не делать
-11. Чек-лист
-
----
-
-## 1. Принципы
-
-- **Тест проверяет поведение через публичный интерфейс**: вход функции →
-  выход; действие пользователя → то, что он видит, и вызванные зависимости.
-  Не внутреннее состояние и не приватные функции.
-- **Зависимости подменяются через DI**, а не через `vi.mock` своих модулей.
-  Если код невозможно протестировать без `vi.mock("@/shared/api")` —
-  это сигнал, что зависимость скрыта; исправь код (DI-reference, раздел 5).
-  `vi.mock` допустим для сторонних модулей, которые нельзя внедрить.
-- **Детерминизм.** Время, id, random — внедряются или фиксируются
-  (`vi.useFakeTimers()`, `createId` в deps). Реальной сети нет никогда.
-- **Один тест — одно поведение.** Имя теста описывает поведение:
-  `"rolls back the board when saving fails"`, а не `"test moveCard 2"`.
-- **Arrange / Act / Assert**, общий arrange — в функции `setup()`, а не в
-  `beforeEach` с мутируемыми переменными.
-- Тест лежит рядом с файлом: `board.ts` → `board.test.ts`.
+1. Principles
+2. What to test at each level
+3. Infrastructure: setup, test providers, MSW
+4. Fakes and data builders: `testing.ts`
+5. Pure functions
+6. Stores and services with dependencies
+7. Slice components and hooks
+8. Server data
+9. Page and adapters
+10. What not to do
+11. Checklist
 
 ---
 
-## 2. Что тестировать на каждом уровне
+## 1. Principles
 
-| Уровень | Тип теста | Подмена зависимостей | Что проверять |
+- **A test checks behavior through the public interface**: function input →
+  output; a user action → what they see, and which dependencies were called.
+  Not internal state and not private functions.
+- **Dependencies are replaced via DI**, not via `vi.mock` of your own modules.
+  If code can't be tested without `vi.mock("@/shared/api")`, that's a signal
+  the dependency is hidden; fix the code (DI reference, section 5). `vi.mock`
+  is acceptable for third-party modules that can't be injected.
+- **Determinism.** Time, ids, random are injected or pinned
+  (`vi.useFakeTimers()`, `createId` in deps). Never a real network.
+- **One test — one behavior.** The test name describes the behavior:
+  `"rolls back the board when saving fails"`, not `"test moveCard 2"`.
+- **Arrange / Act / Assert**; shared arrange goes into a `setup()` function,
+  not a `beforeEach` with mutable variables.
+- The test sits next to the file: `board.ts` → `board.test.ts`.
+
+---
+
+## 2. What to test at each level
+
+| Level | Test type | Replacing dependencies | What to check |
 |---|---|---|---|
-| `model/<domain>.ts` (чистые функции) | unit | не нужна | правила, граничные случаи, неизменяемость входа |
-| Фабрика стора / сервиса | unit | фейковые `deps` | порядок вызовов deps, итоговое состояние, откат при ошибке, отмена |
-| Хук / компонент слайса | Testing Library | провайдер слайса с фейковыми deps + тестовые сервисы | сценарий пользователя: клик → что видно, что вызвано |
-| Хуки серверных данных | Testing Library | MSW + свежий QueryClient | маппинг DTO, обработка ошибки, инвалидация |
-| Адаптер страницы | unit / renderHook | фейки нижних хуков или MSW | маппинг типов, правильное связывание |
-| Страница | интеграционный | MSW | ключевой сценарий экрана целиком |
-| Приложение | e2e (Playwright) | реальный или стенд-бэкенд | 3–10 критических путей (вход, основной сценарий, оплата) |
+| `model/<domain>.ts` (pure functions) | unit | not needed | rules, edge cases, input immutability |
+| Store / service factory | unit | fake `deps` | order of deps calls, resulting state, rollback on error, cancellation |
+| Slice hook / component | Testing Library | the slice's provider with fake deps + test services | user scenario: click → what's visible, what was called |
+| Server data hooks | Testing Library | MSW + a fresh QueryClient | DTO mapping, error handling, invalidation |
+| Page adapter | unit / renderHook | fakes of lower hooks or MSW | type mapping, correct wiring |
+| Page | integration | MSW | the screen's key scenario as a whole |
+| App | e2e (Playwright) | a real or staging backend | 3–10 critical paths (sign-in, the main scenario, payment) |
 
-Пирамида: больше всего — чистых функций и сторов (быстро, стабильно),
-меньше — интеграционных, совсем немного — e2e.
+The pyramid: most tests are for pure functions and stores (fast, stable),
+fewer integration tests, very few e2e.
 
 ---
 
-## 3. Инфраструктура
+## 3. Infrastructure
 
 ### 3.1. Setup
 
@@ -66,7 +66,7 @@ import { afterAll, afterEach, beforeAll } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { server } from "@/shared/lib/test/msw-server";
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" })); // MSW 3; в MSW 2 — onUnhandledRequest
+beforeAll(() => server.listen({ onUnhandledFrame: "error" })); // MSW 3; in MSW 2 — onUnhandledRequest
 afterEach(() => {
   server.resetHandlers();
   cleanup();
@@ -74,15 +74,15 @@ afterEach(() => {
 afterAll(() => server.close());
 ```
 
-`onUnhandledFrame: "error"` — любой незамоканный запрос валит тест,
-а не уходит в сеть. Имя опции зависит от версии MSW, а неизвестную опцию MSW
-тихо игнорирует: проверь, что незамоканный запрос действительно падает.
+`onUnhandledFrame: "error"` — any unmocked request fails the test instead of
+hitting the network. The option name depends on the MSW version, and MSW
+silently ignores unknown options: verify that an unmocked request actually fails.
 
-### 3.2. Тестовые провайдеры
+### 3.2. Test providers
 
-Одна функция, которая собирает **глобальные** провайдеры приложения с
-тестовыми реализациями. Провайдеры слайсов (с фейковыми deps) тест
-добавляет сам — так видно, что именно подменено.
+One function that assembles the app's **global** providers with test
+implementations. The test adds slice providers (with fake deps) itself — that
+way it's visible what exactly is replaced.
 
 ```tsx
 // shared/lib/test/render.tsx
@@ -116,17 +116,17 @@ export function renderWithProviders(ui: ReactElement, services: TestServices = {
 }
 ```
 
-Тексты в тестах — реальные переводы локали по умолчанию: запросы
-`getByRole("button", { name: "Remove card" })` читаются как сценарий.
+Copy in tests uses the real translations of the default locale: queries like
+`getByRole("button", { name: "Remove card" })` read like a scenario.
 
 ---
 
-## 4. Фейки и билдеры данных: `testing.ts`
+## 4. Fakes and data builders: `testing.ts`
 
-У каждого слайса с контрактом — второй, тестовый public API:
+Every slice with a contract has a second, test-only public API:
 
 ```ts
-// features/task-board/testing.ts — импортируется ТОЛЬКО из тестов
+// features/task-board/testing.ts — imported ONLY from tests
 import { vi } from "vitest";
 import type { TaskBoardDeps } from "./model/deps";
 import type { Board, BoardCard, BoardColumn } from "./model/board";
@@ -160,18 +160,17 @@ export const buildBoard = (overrides: Partial<Board> = {}): Board => ({
 });
 ```
 
-- Фейк по умолчанию — «счастливый путь»; тест переопределяет только то, что
-  ему важно.
-- Билдеры дают валидный объект с разумными значениями; тест указывает
-  только значимые поля. Это делает тест устойчивым к добавлению новых полей.
-- Сущности экспортируют билдеры моделей и DTO (`buildTask`, `buildTaskDto`)
-  и MSW-хендлеры (`taskHandlers`) из своего `testing.ts`.
-- Импорт `testing.ts` из прод-кода запрещён линтером
-  (см. `conventions.md`, раздел «Линтер границ»).
+- The default fake is the "happy path"; a test overrides only what matters to it.
+- Builders produce a valid object with sensible values; the test specifies only
+  the meaningful fields. This makes the test resilient to new fields.
+- Entities export model and DTO builders (`buildTask`, `buildTaskDto`) and MSW
+  handlers (`taskHandlers`) from their `testing.ts`.
+- Importing `testing.ts` from production code is forbidden by the linter
+  (see `conventions.md`, "Boundaries linter" section).
 
 ---
 
-## 5. Чистые функции
+## 5. Pure functions
 
 ```ts
 // features/task-board/model/board.test.ts
@@ -208,12 +207,12 @@ describe("moveCard", () => {
 });
 ```
 
-Покрывай граничные случаи: пустые списки, перемещение в ту же колонку,
-индекс за пределами, дубликаты.
+Cover edge cases: empty lists, moving within the same column, an out-of-range
+index, duplicates.
 
 ---
 
-## 6. Сторы и сервисы с зависимостями
+## 6. Stores and services with dependencies
 
 ```ts
 // features/task-board/model/board-store.test.ts
@@ -256,13 +255,13 @@ it("keeps the card unchanged when the user cancels editing", async () => {
 });
 ```
 
-Что проверять: что вызвано в deps и с чем; итоговое состояние; откат при
-ошибке; поведение при отмене (`null`); что ошибка проброшена, а не
-проглочена.
+What to check: what was called in deps and with what; the resulting state;
+rollback on error; behavior on cancellation (`null`); that the error is
+rethrown, not swallowed.
 
 ---
 
-## 7. Компоненты и хуки слайса
+## 7. Slice components and hooks
 
 ```tsx
 // features/task-board/ui/task-board.test.tsx
@@ -310,16 +309,16 @@ it("shows an error and restores the card when deletion fails", async () => {
 });
 ```
 
-- Запросы — по роли и доступному имени (`getByRole`, `getByLabelText`);
-  `getByTestId` — последний вариант. Если элемент нельзя найти по роли, это
-  часто проблема доступности самого компонента.
-- Действия — через `userEvent`, не `fireEvent`.
-- Ожидание асинхронного результата — `findBy*` / `waitFor`, не `sleep`.
-- Хуки без UI — `renderHook` с `wrapper` из тестовых провайдеров.
+- Queries by role and accessible name (`getByRole`, `getByLabelText`);
+  `getByTestId` is the last resort. If an element can't be found by role, it's
+  often an accessibility problem in the component itself.
+- Actions via `userEvent`, not `fireEvent`.
+- Waiting for an async result — `findBy*` / `waitFor`, not `sleep`.
+- Hooks without UI — `renderHook` with a `wrapper` from the test providers.
 
 ---
 
-## 8. Серверные данные
+## 8. Server data
 
 ```ts
 // entities/task/api/task.queries.test.ts
@@ -340,54 +339,54 @@ it("maps the task DTO to the domain model", async () => {
 
 it("exposes the error when the server fails", async () => {
   server.use(http.get("/api/tasks/:id", () => new HttpResponse(null, { status: 500 })));
-  // ... ожидаем isError
+  // ... expect isError
 });
 ```
 
-- MSW-хендлеры по умолчанию («счастливый путь») — в `testing.ts`
-  сущности; тест переопределяет нужное через `server.use`.
-- Мутации проверяй по эффекту: после `createTask` список, подписанный на
-  `taskQueries.list`, перезапрашивается (хендлер вызван повторно / данные
-  обновились в UI).
+- Default MSW handlers ("happy path") live in the entity's `testing.ts`; a test
+  overrides what it needs via `server.use`.
+- Check mutations by their effect: after `createTask`, the list subscribed to
+  `taskQueries.list` is refetched (the handler is called again / the data
+  updated in the UI).
 
 ---
 
-## 9. Страница и адаптеры
+## 9. Page and adapters
 
-- **Адаптер** (`use-<feature>-adapter.ts`) тестируется `renderHook`:
-  вызови `result.current.createCard(...)` и проверь маппинг типов и то,
-  что ушло в API (через MSW) или в фейки нижних хуков.
-- **Страница** — один-два интеграционных теста ключевого сценария с MSW:
-  загрузилась → пользователь сделал главное действие → видит результат.
-  Не дублируй здесь проверки, уже сделанные на уровне слайсов.
-
----
-
-## 10. Чего не делать
-
-- `vi.mock` собственных модулей вместо DI.
-- Проверять внутреннее состояние стора из теста компонента.
-- Снапшоты больших деревьев: ломаются от любой правки разметки и ничего
-  не проверяют. Допустимы для маленьких сериализуемых значений.
-- Тестировать библиотеки (что `useQuery` кэширует, что `zustand` обновляет).
-- Тесты, зависящие от порядка запуска, реального времени, сети, локали машины.
-- `sleep`/`setTimeout` в тестах вместо `findBy*` / fake timers.
-- Тривиальные тесты ради покрытия (компонент рендерит пропс как текст).
-- Глотать ошибки в тестах: если код должен бросить — `rejects.toThrow`.
-- Полагаться на CSS в jsdom: он не применяет стили, и элемент, скрытый
-  классом (`hidden`, вариант Tailwind), для Testing Library существует и
-  находится по имени. Запросы по имени делай точными (`/^password$/i`, а не
-  `/password/i`, который совпадёт и с «Show password»); видимость, зависящую
-  от CSS, проверяй в e2e.
+- **An adapter** (`use-<feature>-adapter.ts`) is tested with `renderHook`:
+  call `result.current.createCard(...)` and check the type mapping and what
+  went to the API (via MSW) or to the fakes of lower hooks.
+- **A page** — one or two integration tests of the key scenario with MSW:
+  loaded → the user performed the main action → sees the result. Don't
+  duplicate checks already done at the slice level.
 
 ---
 
-## 11. Чек-лист
+## 10. What not to do
 
-- [ ] Нетривиальная чистая логика покрыта unit-тестами с граничными случаями.
-- [ ] Стор/сервис протестирован с фейковыми deps: успех, ошибка с откатом,
-      отмена.
-- [ ] Ключевые сценарии пользователя слайса покрыты компонентными тестами.
-- [ ] Нет `vi.mock` собственных модулей, реальной сети, реального времени.
-- [ ] Для контрактов есть фейки, для моделей — билдеры, в `testing.ts`.
-- [ ] Тесты запущены, и они проходят.
+- `vi.mock` of your own modules instead of DI.
+- Checking a store's internal state from a component test.
+- Snapshots of large trees: they break on any markup change and check nothing.
+  Acceptable for small serializable values.
+- Testing libraries (that `useQuery` caches, that `zustand` updates).
+- Tests that depend on run order, real time, the network, the machine's locale.
+- `sleep`/`setTimeout` in tests instead of `findBy*` / fake timers.
+- Trivial tests for coverage's sake (a component renders a prop as text).
+- Swallowing errors in tests: if the code should throw — `rejects.toThrow`.
+- Relying on CSS in jsdom: it doesn't apply styles, and an element hidden by a
+  class (`hidden`, a Tailwind variant) still exists for Testing Library and is
+  found by name. Make name queries precise (`/^password$/i`, not
+  `/password/i`, which also matches "Show password"); check CSS-dependent
+  visibility in e2e.
+
+---
+
+## 11. Checklist
+
+- [ ] Non-trivial pure logic is covered by unit tests with edge cases.
+- [ ] The store/service is tested with fake deps: success, error with rollback,
+      cancellation.
+- [ ] The slice's key user scenarios are covered by component tests.
+- [ ] No `vi.mock` of your own modules, no real network, no real time.
+- [ ] Contracts have fakes and models have builders, in `testing.ts`.
+- [ ] The tests have been run, and they pass.

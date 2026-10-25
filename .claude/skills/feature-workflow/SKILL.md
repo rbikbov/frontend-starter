@@ -1,159 +1,157 @@
 ---
 name: feature-workflow
 description: >
-  Процесс разработки фичи с агентом: PRD с Non-Goals → компактная
-  спецификация → задачи по одной на коммит → read-only исследование →
-  tracer bullet → сборка с тестом сначала → независимое ревью субагентом →
-  проверка в браузере. Использовать, когда просят сделать фичу, экран,
-  пользовательский сценарий или заметное изменение поведения; когда нужно
-  написать PRD, спецификацию или разбить работу на задачи; когда работа
-  больше одного коммита. Не использовать для опечаток и однострочных правок.
+  Feature development process with an agent: PRD with Non-Goals → compact
+  spec → tasks, one per commit → read-only research → tracer bullet →
+  build with tests first → independent review by a subagent → check in the
+  browser. Use when asked to build a feature, a screen, a user scenario or a
+  noticeable behavior change; when you need to write a PRD or a spec, or break
+  work into tasks; when the work is bigger than one commit. Do not use for
+  typos and one-line fixes.
 ---
 
-# Процесс фичи
+# Feature process
 
-Главный принцип: **чем меньше решений агент принимает сам, тем стабильнее
-результат.** Каждая фаза заканчивается артефактом в
-`docs/features/<slug>/` и проверкой («воротами»). Там, где помечено,
-переход дальше — только после подтверждения человека.
+Core principle: **the fewer decisions the agent makes on its own, the more
+stable the result.** Every phase ends with an artifact in
+`docs/features/<slug>/` and a check (a "gate"). Where marked, moving on
+requires a human's confirmation.
 
-Как писать сам код — `fsd-frontend`; проверка на мусор — `anti-slop-review`;
-вход и сессия — `frontend-auth-session`.
+How to write the code itself — `fsd-frontend`; junk check — `anti-slop-review`;
+sign-in and session — `frontend-auth-session`.
 
 ---
 
-## 1. Фазы
+## 1. Phases
 
-| # | Фаза | Артефакт | Утверждает | Ворота |
+| # | Phase | Artifact | Approved by | Gate |
 |---|---|---|---|---|
-| 0 | Подготовка | ветка | — | Рабочее дерево чистое; после установки зависимостей и миграций — `/clear` |
-| 1 | PRD | `prd.md` | человек | Non-Goals заполнены; критерии проверяемые; нет технических решений |
-| 2 | Спецификация | `spec.md`, до 150 строк | человек | Покрывает все критерии PRD и ничего сверх |
-| 3 | Задачи | `tasks.md` | человек | Одна задача — один коммит; первая — tracer bullet |
-| 4 | Исследование | журнал в `tasks.md` | — | Только чтение; найдено, что переиспользовать |
-| 5 | Tracer bullet | коммит | — | Один сценарий проходит насквозь и виден в браузере |
-| 6 | Сборка | коммит на задачу | — | Тест сначала для логики; `pnpm check` зелёный |
-| 7 | Ревью | отчёт `reviewer` | человек по находкам | Подтверждённые находки исправлены |
-| 8 | Браузер | e2e на критичный путь | — | Сценарии PRD проходят без ошибок в консоли |
+| 0 | Preparation | branch | — | Clean working tree; `/clear` after installing dependencies and running migrations |
+| 1 | PRD | `prd.md` | human | Non-Goals filled in; criteria are testable; no technical decisions |
+| 2 | Spec | `spec.md`, up to 150 lines | human | Covers every PRD criterion and nothing beyond |
+| 3 | Tasks | `tasks.md` | human | One task — one commit; the first one is a tracer bullet |
+| 4 | Research | log in `tasks.md` | — | Read-only; found what to reuse |
+| 5 | Tracer bullet | commit | — | One scenario works end to end and is visible in the browser |
+| 6 | Build | a commit per task | — | Test first for logic; `pnpm check` is green |
+| 7 | Review | `reviewer` report | human, on findings | Confirmed findings are fixed |
+| 8 | Browser | e2e for the critical path | — | PRD scenarios pass with no console errors |
 
-Маленькая задача (один коммит, без нового поведения для пользователя)
-пропускает фазы 1–3, но Non-Goals всё равно записываются в описание задачи.
-Пропуск фазы называется вслух, а не происходит молча.
+A small task (one commit, no new user-facing behavior) skips phases 1–3, but
+Non-Goals are still written into the task description. Skipping a phase is
+stated out loud, never done silently.
 
 ---
 
 ## 2. PRD
 
-Шаблон — `docs/features/_template/prd.md`.
+Template — `docs/features/_template/prd.md`.
 
-- Агент составляет черновик из запроса и спрашивает только то, без чего
-  нельзя продолжить. Остальное — допущения в «Открытых вопросах», которые
-  человек подтверждает при утверждении.
-- **Non-Goals обязательны.** Перечисли то, что агенту захочется сделать
-  «заодно»: адаптив под новые размеры, анимации, i18n, кэширование,
-  админку, рефакторинг соседнего кода. Без этого списка фича разрастается.
-- Критерии готовности проверяемые: «Дано / Когда / Тогда», а не «удобно» и
-  «быстро».
-- Никаких библиотек, файлов и схем: это вопрос «что и зачем», не «как».
+- The agent drafts it from the request and asks only what blocks progress.
+  Everything else becomes assumptions under "Open questions", which the human
+  confirms during approval.
+- **Non-Goals are required.** List what the agent will be tempted to do
+  "while at it": responsive layouts for new sizes, animations, i18n, caching,
+  an admin panel, refactoring nearby code. Without this list the feature grows.
+- Acceptance criteria are testable: "Given / When / Then", not "convenient" or
+  "fast".
+- No libraries, files or schemas: this is about "what and why", not "how".
 
-## 3. Спецификация
+## 3. Spec
 
-Шаблон — `docs/features/_template/spec.md`.
+Template — `docs/features/_template/spec.md`.
 
-- До 150 строк. Пишет агент, утверждает человек. Длинная сгенерированная
-  спецификация хуже никакой: она забивает контекст и размывает решения.
-- Перед написанием — короткий read-only обзор затронутых слоёв: что уже
-  есть, что переиспользовать.
-- Содержит: где живёт код (слои, слайсы), контракты данных (схемы zod,
-  маппинг DTO), API (вход, выход, ошибки → `kind`), состояния UI, граничные
-  случаи, приёмочные сценарии с уровнем теста.
-- **Спецификация живёт вместе с кодом.** Изменилось поведение — правится
-  `spec.md` в том же коммите. Код, расходящийся со спецификацией, — дефект
-  одного из двух.
+- Up to 150 lines. Written by the agent, approved by a human. A long generated
+  spec is worse than none: it clogs the context and blurs the decisions.
+- Before writing, do a short read-only survey of the affected layers: what
+  already exists, what to reuse.
+- Contains: where the code lives (layers, slices), data contracts (zod schemas,
+  DTO mapping), API (input, output, errors → `kind`), UI states, edge cases,
+  acceptance scenarios with the test level.
+- **The spec lives with the code.** If behavior changes, `spec.md` is updated
+  in the same commit. Code that diverges from the spec is a defect in one of
+  the two.
 
-## 4. Задачи
+## 4. Tasks
 
-Шаблон — `docs/features/_template/tasks.md`.
+Template — `docs/features/_template/tasks.md`.
 
-- Одна задача — один коммит, после которого проект собирается и проверки
-  проходят. Если агент зашёл в тупик, откат на предыдущий коммит дешевле
-  спора с моделью.
-- Задача помещается в одну сессию; у каждой — «готово, когда».
-- Первая задача — tracer bullet, дальше — состояния, граничные случаи,
-  полировка.
+- One task — one commit, after which the project builds and the checks pass.
+  If the agent hits a dead end, rolling back to the previous commit is cheaper
+  than arguing with the model.
+- A task fits into one session; each has a "done when".
+- The first task is a tracer bullet; then states, edge cases, polish.
 
-## 5. Исследование (только чтение)
+## 5. Research (read-only)
 
-Перед каждой задачей, без правок файлов:
-- `AGENTS.md` затронутых папок;
-- существующий код, который решает похожее (`rg` по именам и контрактам);
-- контракты и типы, на которые задача опирается.
+Before each task, without editing files:
+- `AGENTS.md` of the affected folders;
+- existing code that solves something similar (`rg` by names and contracts);
+- contracts and types the task relies on.
 
-Если найденное понадобится позже — 2–3 строки в журнал `tasks.md`.
+If the findings will be needed later, add 2–3 lines to the `tasks.md` log.
 
 ## 6. Tracer bullet
 
-Один сценарий насквозь: маршрут → страница → фича или сущность →
-`request()` → route handler или бэкенд → результат на экране.
+One scenario end to end: route → page → feature or entity →
+`request()` → route handler or backend → result on screen.
 
-- Это production-код, а не прототип: правильные слои, настоящие контракты из
-  спецификации.
-- Сознательно без: подробной валидации, полировки состояний загрузки и
-  ошибок, стилей, граничных случаев.
-- Бэкенд не готов — обработчик MSW или route handler, отдающий данные по
-  контракту из спецификации; это отмечается в `tasks.md`.
-- Проверка — в браузере: сценарий проходит и в консоли нет ошибок.
+- This is production code, not a prototype: correct layers, real contracts
+  from the spec.
+- Deliberately without: detailed validation, polished loading and error
+  states, styles, edge cases.
+- Backend not ready — an MSW handler or a route handler serving data per the
+  spec's contract; note this in `tasks.md`.
+- Check it in the browser: the scenario works and the console has no errors.
 
-## 7. Сборка
+## 7. Build
 
-- **Логика — тест сначала:** чистые функции, сторы, маппинг ответов, хуки с
-  ветвлением. Тест должен упасть по ожидаемой причине, потом — код. Тест,
-  написанный после кода, склонен проверять то, что код делает, а не то, что
-  требуется.
-- **Вёрстка и стили — без теста заранее:** их проверяет браузер (фаза 8),
-  критичный путь закрывается e2e.
-- После задачи: `pnpm check`, коммит (lint-staged проверит изменённые файлы).
-- **Остановка:** три неудачные попытки исправить одно и то же — стоп.
-  Опиши человеку, что пробовал и какая гипотеза. Не подгоняй тесты под
-  код, не отключай правила линтера, не ослабляй типы.
-- Всё, что вне задачи, — в журнал «потом», а не в этот коммит.
+- **Logic — test first:** pure functions, stores, response mapping, hooks with
+  branching. The test must fail for the expected reason, then write the code.
+  A test written after the code tends to check what the code does rather than
+  what is required.
+- **Markup and styles — no test up front:** the browser checks them (phase 8),
+  and the critical path is covered by e2e.
+- After a task: `pnpm check`, commit (lint-staged checks the changed files).
+- **Stop:** three failed attempts to fix the same thing — stop. Tell the
+  human what you tried and what your hypothesis is. Don't tailor tests to the
+  code, don't disable linter rules, don't weaken types.
+- Anything outside the task goes into the "later" log, not into this commit.
 
-## 8. Ревью
+## 8. Review
 
-- Субагент `reviewer` (`.claude/agents/reviewer.md`) с чистым контекстом:
-  передай путь к `prd.md` и `spec.md` и диапазон коммитов; diff он прочитает
-  сам. Автор кода свои ошибки видит хуже: в его контексте — аргументы, почему
-  решение верное.
-- Подтверждённые находки исправляются, спорные — решает человек.
-- **Безопасность смотрит и человек:** вход, сессии, редиректы, cookie,
-  пользовательский ввод в HTML. Зелёные проверки этого не гарантируют: на
-  практике открытый редирект проходил тесты, а нечитаемая страница ошибки —
-  линтер.
+- The `reviewer` subagent (`.claude/agents/reviewer.md`) with a clean context:
+  pass the path to `prd.md` and `spec.md` and the commit range; it reads the
+  diff itself. The author sees their own mistakes worse: their context holds
+  the arguments for why the solution is right.
+- Confirmed findings are fixed; disputed ones are decided by the human.
+- **A human also reviews security:** sign-in, sessions, redirects, cookies,
+  user input in HTML. Green checks don't guarantee it: in practice an open
+  redirect passed the tests, and an unreadable error page passed the linter.
 
-## 9. Браузер
+## 9. Browser
 
-- Next.js: скилл `next-dev-loop` с `agent-browser`, если установлен; иначе
-  Playwright или Chrome DevTools MCP.
-- Пройди сценарии PRD, включая негативные: пустые данные, ошибка сети,
-  повторная отправка. Смотри консоль и статусы запросов.
-- Для UI — светлая и тёмная тема, ширина телефона.
-- Критичный путь — e2e-тест в `e2e/`.
-- **Готово**, когда каждый критерий PRD проверен; в итоговом сообщении —
-  список критериев и как проверен каждый.
+- Next.js: the `next-dev-loop` skill with `agent-browser` if installed;
+  otherwise Playwright or the Chrome DevTools MCP.
+- Walk through the PRD scenarios, including negative ones: empty data, network
+  error, resubmission. Watch the console and request statuses.
+- For UI — light and dark themes, phone width.
+- The critical path gets an e2e test in `e2e/`.
+- **Done** when every PRD criterion is verified; the final message lists the
+  criteria and how each was verified.
 
 ---
 
-## 10. Контекст
+## 10. Context
 
-- Состояние работы живёт в `docs/features/<slug>/`, а не в переписке:
-  новую сессию начинай с чтения `prd.md`, `spec.md`, `tasks.md`.
-- После шумных шагов (установка, миграции, длинные логи) — `/clear`.
-- Параллельные эксперименты — в `git worktree`, не в рабочей ветке.
+- Work state lives in `docs/features/<slug>/`, not in the chat: start a new
+  session by reading `prd.md`, `spec.md`, `tasks.md`.
+- After noisy steps (installs, migrations, long logs) — `/clear`.
+- Parallel experiments go into a `git worktree`, not the working branch.
 
-## 11. Чего не делать
+## 11. What not to do
 
-- Бесконечные уточняющие вопросы: спрашивай то, что блокирует, остальное —
-  допущения в PRD.
-- Оркестраторы из многих агентов: достаточно исполнителя и ревьюера.
-- Спецификации и документация, которые никто не утверждал и не читает.
-- Молчаливый пропуск фаз и «заодно поправил».
+- Endless clarifying questions: ask what blocks you, record the rest as
+  assumptions in the PRD.
+- Orchestrators of many agents: an executor and a reviewer are enough.
+- Specs and documentation nobody approved or reads.
+- Silently skipping phases and "fixed it while I was there".

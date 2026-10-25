@@ -6,7 +6,7 @@ import { useState, type ReactNode } from "react";
 import { createQueryClient } from "@/shared/api";
 
 export function AppProviders({ children }: { children: ReactNode }) {
-  // useState, а не модульная переменная: на сервере модуль общий для запросов разных пользователей
+  // useState, not a module variable: on the server the module is shared across requests from different users
   const [queryClient] = useState(createQueryClient);
 
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;

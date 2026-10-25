@@ -1,49 +1,49 @@
-# Спецификация: <название фичи>
+# Spec: <feature name>
 
-PRD: [prd.md](./prd.md) · Статус: черновик · Дата: YYYY-MM-DD
+PRD: [prd.md](./prd.md) · Status: draft · Date: YYYY-MM-DD
 
-<!-- До 150 строк. Пишет агент, утверждает человек. Изменилось поведение — правится в том же коммите. -->
+<!-- Up to 150 lines. Written by the agent, approved by a human. If behavior changes, update it in the same commit. -->
 
-## Контекст
+## Context
 
-<Один абзац: что строим и на что опираемся из существующего кода.>
+<One paragraph: what we are building and what existing code we rely on.>
 
-## Где живёт код
+## Where the code lives
 
-| Слой / слайс        | Что добавляем или меняем | Что переиспользуем |
-| ------------------- | ------------------------ | ------------------ |
-| `src/_pages/<page>` | …                        | …                  |
+| Layer / slice       | What we add or change | What we reuse |
+| ------------------- | --------------------- | ------------- |
+| `src/_pages/<page>` | …                     | …             |
 
-## Контракты данных
+## Data contracts
 
 ```ts
-// схемы zod ответов и маппинг DTO → доменный тип
+// zod response schemas and DTO → domain type mapping
 ```
 
 ## API
 
-| Метод и путь | Вход | Выход | Ошибки → `kind`   |
-| ------------ | ---- | ----- | ----------------- |
-| `GET /…`     | …    | …     | 404 → `not-found` |
+| Method and path | Input | Output | Errors → `kind`   |
+| --------------- | ----- | ------ | ----------------- |
+| `GET /…`        | …     | …      | 404 → `not-found` |
 
-## Состояния UI
+## UI states
 
-- Загрузка: …
-- Ошибка: … (что видит пользователь, как повторить)
-- Пусто: …
-- Успех: …
-- Повторная отправка: заблокирована на время запроса.
+- Loading: …
+- Error: … (what the user sees, how to retry)
+- Empty: …
+- Success: …
+- Resubmission: blocked while the request is in flight.
 
-## Граничные случаи
+## Edge cases
 
 - …
 
-## Приёмочные сценарии
+## Acceptance scenarios
 
-| Критерий PRD | Сценарий | Уровень теста          |
-| ------------ | -------- | ---------------------- |
-| …            | …        | unit / component / e2e |
+| PRD criterion | Scenario | Test level             |
+| ------------- | -------- | ---------------------- |
+| …             | …        | unit / component / e2e |
 
-## Риски
+## Risks
 
 - …

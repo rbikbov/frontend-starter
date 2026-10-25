@@ -5,9 +5,9 @@ const schema = z.object({
   NEXT_PUBLIC_APP_URL: z.url(),
 });
 
-// NODE_ENV и NEXT_PUBLIC_* попадают в клиентский бандл при сборке только при прямом
-// обращении: без деструктуризации process.env и без process.env[name].
-// Валидация при импорте: неверная конфигурация падает при старте, а не на первом запросе.
+// NODE_ENV and NEXT_PUBLIC_* are inlined into the client bundle at build time only on direct
+// access: no destructuring of process.env and no process.env[name].
+// Validated on import: a wrong configuration fails at startup, not on the first request.
 export const clientEnv = schema.parse({
   NODE_ENV: process.env.NODE_ENV,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,

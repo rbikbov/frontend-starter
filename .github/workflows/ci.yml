@@ -18,13 +18,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # версия pnpm — из packageManager
+      - uses: pnpm/action-setup@v4 # pnpm version comes from packageManager
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # next typegen и build загружают next.config и env — на значениях из примера
+      # next typegen and build load next.config and env — using the example values
       - run: cp .env.example .env
       - run: pnpm lint
       - run: pnpm format:check

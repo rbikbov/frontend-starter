@@ -23,7 +23,7 @@ const buttonVariants = cva(
 
 export type ButtonProps = ComponentProps<"button"> & VariantProps<typeof buttonVariants>;
 
-// type="button" по умолчанию: кнопка внутри формы не должна отправлять её случайно
+// type="button" by default: a button inside a form must not submit it by accident
 export function Button({ className, variant, size, type = "button", ...props }: ButtonProps) {
   return (
     <button type={type} className={cn(buttonVariants({ variant, size }), className)} {...props} />

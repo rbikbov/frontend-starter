@@ -1,24 +1,24 @@
-# ADR-NNNN: <короткое название решения>
+# ADR-NNNN: <short decision title>
 
-Статус: предложено | принято | заменено ADR-NNNN · Дата: YYYY-MM-DD · Автор: <имя>
+Status: proposed | accepted | superseded by ADR-NNNN · Date: YYYY-MM-DD · Author: <name>
 
-<!-- Одна-две страницы. Подробный формат и чек-лист — скилл adr-writer. -->
+<!-- One or two pages. Full format and checklist: the adr-writer skill. -->
 
-## Контекст
+## Context
 
-<Какую проблему решаем, какие ограничения действуют.>
+<What problem we are solving and which constraints apply.>
 
-## Решение
+## Decision
 
-<Одна-две фразы: что выбрали.>
+<One or two sentences: what we chose.>
 
-## Альтернативы
+## Alternatives
 
-| Вариант | Плюсы | Минусы | Почему нет |
-| ------- | ----- | ------ | ---------- |
-| …       | …     | …      | …          |
+| Option | Pros | Cons | Why not |
+| ------ | ---- | ---- | ------- |
+| …      | …    | …    | …       |
 
-## Последствия
+## Consequences
 
-- Плюсы: …
-- Минусы и риски: … (как смягчаем)
+- Pros: …
+- Cons and risks: … (and how we mitigate them)

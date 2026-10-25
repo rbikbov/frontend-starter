@@ -1,68 +1,66 @@
 # Frontend starter
 
-Next.js 16 (App Router) + TypeScript + Feature-Sliced Design. Этот файл читается в начале
-каждой сессии, поэтому здесь только то, что нужно всегда. Подробности — в `AGENTS.md`
-папок (подгружаются, когда работаешь в папке) и в скиллах `.claude/skills/`.
+Next.js 16 (App Router) + TypeScript + Feature-Sliced Design. This file is read at the start
+of every session, so it holds only what is always needed. Details live in folder-level
+`AGENTS.md` files (loaded when you work in that folder) and in the skills in `.claude/skills/`.
 
-## Команды
+## Commands
 
-| Что                     | Команда                                                   |
-| ----------------------- | --------------------------------------------------------- |
-| Разработка              | `pnpm dev`                                                |
-| Проверка перед коммитом | `pnpm check` — lint, typecheck, unit и компонентные тесты |
-| e2e                     | `pnpm e2e` — собирает прод и поднимает его на :3100       |
-| Форматирование          | `pnpm format`                                             |
+| What                  | Command                                                  |
+| --------------------- | -------------------------------------------------------- |
+| Development           | `pnpm dev`                                               |
+| Check before a commit | `pnpm check` — lint, typecheck, unit and component tests |
+| e2e                   | `pnpm e2e` — builds production and serves it on :3100    |
+| Formatting            | `pnpm format`                                            |
 
-Не утверждай, что проверки проходят, пока не запустил их. В выводе тестов и линтера
-читай ошибки, а не весь лог.
+Do not claim checks pass until you have run them. In test and linter output, read the
+errors, not the whole log.
 
-## Карта
+## Map
 
 ```text
-app/                  маршруты Next: тонкие файлы → src/_pages. Правила: app/AGENTS.md
-src/_app/             провайдеры, токены дизайна (styles/globals.css), реализация логгера
-src/_pages/           страницы (слой pages)
-src/widgets|features|entities/   появляются с первым слайсом, пустыми не создаются
-src/shared/api/       request(), AppError, QueryClient. Правила: src/shared/api/AGENTS.md
-src/shared/config/    переменные окружения. Правила: src/shared/config/AGENTS.md
-src/shared/lib|ui/    утилиты, логгер, UI-примитивы
-docs/adr/             архитектурные решения;  docs/features/  PRD, спецификации, задачи
+app/                  Next routes: thin files → src/_pages. Rules: app/AGENTS.md
+src/_app/             providers, design tokens (styles/globals.css), logger implementation
+src/_pages/           pages (the pages layer)
+src/widgets|features|entities/   appear with the first slice, never created empty
+src/shared/api/       request(), AppError, QueryClient. Rules: src/shared/api/AGENTS.md
+src/shared/config/    environment variables. Rules: src/shared/config/AGENTS.md
+src/shared/lib|ui/    utilities, logger, UI primitives
+docs/adr/             architecture decisions;  docs/features/  PRDs, specs, tasks
 e2e/                  Playwright
 ```
 
-## Правила, которые действуют всегда
+## Rules that always apply
 
-1. Импорт только вниз по слоям, в чужой слайс — только через его `index.ts`. Это
-   проверяет линтер; не обходи его и не отключай правила.
-2. Выше `shared/api` ошибки — только `AppError` с `kind`. Вид ошибки — по коду или
-   статусу, не по тексту сообщения.
-3. Данные из сети — через `request()` со схемой zod; ответ маппится в доменный тип на
-   границе API.
-4. `process.env` — только в `src/shared/config`.
-5. В логах нет персональных данных и токенов. Токены сессии недоступны JS.
-6. Стили — только токены из `src/_app/styles/globals.css`. Класс, которого нет в `@theme`,
-   не применяется молча — заведи токен или используй существующий.
-7. У каждого асинхронного действия в UI есть загрузка, ошибка, пустое состояние и
-   блокировка повторной отправки.
-8. Ничего «на будущее»: ни слоёв, ни опций конфига, ни абстракций без потребителя.
-9. Факты о Next.js — из `node_modules/next/dist/docs/` (блок ниже), не из памяти.
+1. Imports go only down the layers; into another slice only through its `index.ts`. The
+   linter checks this; do not work around it or disable rules.
+2. Above `shared/api`, errors are only `AppError` with a `kind`. The kind of error comes
+   from a code or status, not from the message text.
+3. Network data goes through `request()` with a zod schema; the response is mapped to a
+   domain type at the API boundary.
+4. `process.env` only in `src/shared/config`.
+5. No personal data or tokens in logs. Session tokens are not accessible to JS.
+6. Styles use only tokens from `src/_app/styles/globals.css`. A class missing from `@theme`
+   is silently not applied — add a token or use an existing one.
+7. Every async action in the UI has loading, error and empty states and blocks repeated
+   submission.
+8. Nothing "for the future": no layers, config options or abstractions without a consumer.
+9. Facts about Next.js come from `node_modules/next/dist/docs/` (block below), not from memory.
 
-## Как работать
+## How to work
 
-- Фича или заметное изменение поведения — скилл `feature-workflow`: PRD с Non-Goals →
-  спецификация до 150 строк → задачи по одной на коммит → tracer bullet → тест сначала
-  для логики → ревью субагентом `reviewer` → проверка в браузере.
-- Три неудачные попытки исправить одно и то же — остановись и опиши проблему человеку.
-- Решения, которые нужны в следующих сессиях, записывай в `docs/`, а не в переписку.
-- Отступление от правила — с причиной в коде или в ADR.
+- A feature or a noticeable behavior change — the `feature-workflow` skill: PRD with
+  Non-Goals → spec up to 150 lines → tasks, one per commit → tracer bullet → test first for
+  logic → review by the `reviewer` subagent → check in the browser.
+- Three failed attempts to fix the same thing — stop and describe the problem to a human.
+- Decisions needed in later sessions go into `docs/`, not into the chat.
+- A deviation from a rule needs a reason in the code or in an ADR.
 
-## Скиллы
+## Skills
 
-`fsd-frontend` — как писать код · `feature-workflow` — процесс фичи ·
-`anti-slop-review` — проверка перед коммитом и публикацией · `frontend-auth-session` —
-вход и сессия · `adr-writer` — ADR · `frontend-bootstrap` — решения фундамента и аудит.
-
-<!-- BEGIN:nextjs-agent-rules -->
+`fsd-frontend` — how to write code · `feature-workflow` — feature process ·
+`anti-slop-review` — check before a commit or publishing · `frontend-auth-session` —
+sign-in and session · `adr-writer` — ADRs · `frontend-bootstrap` — foundation decisions and audit.
 
 ## This is NOT the Next.js you know
 

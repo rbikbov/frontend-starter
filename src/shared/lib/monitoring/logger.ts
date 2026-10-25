@@ -1,6 +1,6 @@
 /**
- * Контекст лога — только примитивы: целиком объект (запрос, пользователя) в лог не передать.
- * Персональные данные и токены сюда не пишутся: id, kind ошибки, имя операции.
+ * Log context is primitives only: a whole object (request, user) can't be passed to the log.
+ * No personal data or tokens here: ids, error kind, operation name.
  */
 export type LogContext = Record<string, string | number | boolean | null | undefined>;
 

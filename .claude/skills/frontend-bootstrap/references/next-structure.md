@@ -1,19 +1,19 @@
-# Next.js + FSD: раскладка и базовый код
+# Next.js + FSD: layout and base code
 
-## Содержание
+## Contents
 
-1. [Маршруты: тонкие файлы в корневом app/](#1-маршруты-тонкие-файлы-в-корневом-app)
-2. [Корневой лейаут и провайдеры](#2-корневой-лейаут-и-провайдеры)
-3. [Серверные данные и TanStack Query](#3-серверные-данные-и-tanstack-query)
-4. [Конфигурация окружения](#4-конфигурация-окружения)
-5. [API-клиент: request() и ошибки](#5-api-клиент-request-и-ошибки)
-6. [Границы ошибок маршрутов](#6-границы-ошибок-маршрутов)
-7. [Сервер и клиент: где что можно](#7-сервер-и-клиент-где-что-можно)
-8. [Логи и мониторинг как порт](#8-логи-и-мониторинг-как-порт)
+1. [Routes: thin files in the root app/](#1-routes-thin-files-in-the-root-app)
+2. [Root layout and providers](#2-root-layout-and-providers)
+3. [Server data and TanStack Query](#3-server-data-and-tanstack-query)
+4. [Environment configuration](#4-environment-configuration)
+5. [API client: request() and errors](#5-api-client-request-and-errors)
+6. [Route error boundaries](#6-route-error-boundaries)
+7. [Server and client: what goes where](#7-server-and-client-what-goes-where)
+8. [Logging and monitoring as a port](#8-logging-and-monitoring-as-a-port)
 
 ---
 
-## 1. Маршруты: тонкие файлы в корневом app/
+## 1. Routes: thin files in the root app/
 
 ```text
 app/
@@ -30,7 +30,7 @@ src/_pages/
 ```
 
 ```tsx
-// app/(app)/texts/[id]/page.tsx — разобрать вход, отдать странице FSD
+// app/(app)/texts/[id]/page.tsx — parse the input, hand it to the FSD page
 import type { Metadata } from "next";
 import { TextPage, getTextPageMetadata } from "@/_pages/text";
 
@@ -47,16 +47,16 @@ export default async function Page({ params }: Props) {
 }
 ```
 
-- Файл маршрута не содержит JSX сложнее вызова страницы и не импортирует
-  `features`/`entities` напрямую — только `@/_pages/*` и `@/_app`.
-- `searchParams` разбирается и валидируется в странице FSD (хук или функция
-  `parse<Page>Params`), некорректное значение → значение по умолчанию.
-- Группы маршрутов `(auth)`, `(app)` — для разных лейаутов, а не для
-  «красоты» дерева.
+- A route file contains no JSX more complex than rendering the page and
+  doesn't import `features`/`entities` directly — only `@/_pages/*` and `@/_app`.
+- `searchParams` are parsed and validated in the FSD page (a hook or a
+  `parse<Page>Params` function); an invalid value → the default value.
+- Route groups `(auth)`, `(app)` are for different layouts, not for a
+  "prettier" tree.
 
 ---
 
-## 2. Корневой лейаут и провайдеры
+## 2. Root layout and providers
 
 ```tsx
 // app/layout.tsx
@@ -66,7 +66,7 @@ import { AppProviders, fontVariables } from "@/_app";
 import "@/_app/styles/globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "<Название>", template: "%s · <Название>" },
+  title: { default: "<Name>", template: "%s · <Name>" },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -89,12 +89,12 @@ import { useState, type ReactNode } from "react";
 import { createQueryClient } from "@/shared/api";
 
 export function AppProviders({ children }: { children: ReactNode }) {
-  // useState, а не модульная переменная: на сервере модуль общий для всех запросов
+  // useState, not a module variable: on the server the module is shared across all requests
   const [queryClient] = useState(createQueryClient);
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* i18n, тема, ToastProvider/ConfirmProvider с реализациями из _app */}
+      {/* i18n, theme, ToastProvider/ConfirmProvider with implementations from _app */}
       {children}
     </QueryClientProvider>
   );
@@ -108,7 +108,7 @@ import { QueryClient } from "@tanstack/react-query";
 export function createQueryClient() {
   return new QueryClient({
     defaultOptions: {
-      // без staleTime данные, пришедшие с сервера, сразу перезапрашиваются на клиенте
+      // without staleTime, data from the server is refetched on the client right away
       queries: { staleTime: 60_000 },
     },
   });
@@ -117,24 +117,24 @@ export function createQueryClient() {
 
 ---
 
-## 3. Серверные данные и TanStack Query
+## 3. Server data and TanStack Query
 
-Два законных способа, не смешивай их для одних и тех же данных:
+Two legitimate approaches; don't mix them for the same data:
 
-| Данные | Способ |
+| Data | Approach |
 |---|---|
-| Нужны для первого рендера, меняются редко, не нужны клиентским хукам | `await` в Server Component, результат — пропсами |
-| Нужны интерактивным клиентским компонентам (мутации, инвалидация, polling) | prefetch на сервере + `HydrationBoundary`, дальше `useQuery` на клиенте |
+| Needed for the first render, rarely change, not needed by client hooks | `await` in a Server Component, pass the result as props |
+| Needed by interactive client components (mutations, invalidation, polling) | prefetch on the server + `HydrationBoundary`, then `useQuery` on the client |
 
 ```tsx
-// src/_pages/text/ui/text-page.tsx — серверный компонент страницы
+// src/_pages/text/ui/text-page.tsx — the page's server component
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { createQueryClient } from "@/shared/api";
 import { textQueries } from "@/entities/text";
 import { TextEditor } from "@/features/edit-text";
 
 export async function TextPage({ textId }: { textId: string }) {
-  const queryClient = createQueryClient(); // новый на каждый запрос
+  const queryClient = createQueryClient(); // a new one for every request
   await queryClient.prefetchQuery(textQueries.detail(textId));
 
   return (
@@ -145,16 +145,16 @@ export async function TextPage({ textId }: { textId: string }) {
 }
 ```
 
-- `queryFn` в фабрике запросов должна работать и на сервере, и в браузере:
-  абсолютный URL на сервере, относительный — в браузере (или один базовый URL
-  из конфига).
-- Cookie пользователя на сервере `fetch` сам не отправляет: серверный
-  запрос к API от имени пользователя явно пробрасывает их (см.
+- The `queryFn` in a query factory must work both on the server and in the
+  browser: an absolute URL on the server, a relative one in the browser (or a
+  single base URL from the config).
+- On the server, `fetch` doesn't send the user's cookies by itself: a server-side
+  API request on behalf of the user forwards them explicitly (see
   `frontend-auth-session`).
 
 ---
 
-## 4. Конфигурация окружения
+## 4. Environment configuration
 
 ```ts
 // src/shared/config/env.server.ts
@@ -166,8 +166,8 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]),
 });
 
-// Валидация при импорте — сознательное исключение из правила «импорт без побочных эффектов»:
-// она ничего не меняет снаружи и падает при старте, а не на первом запросе.
+// Validation on import is a deliberate exception to the "imports without side effects" rule:
+// it changes nothing outside and fails at startup, not on the first request.
 export const serverEnv = schema.parse({
   API_URL: process.env.API_URL,
   NODE_ENV: process.env.NODE_ENV,
@@ -183,27 +183,27 @@ const schema = z.object({
 });
 
 export const clientEnv = schema.parse({
-  // NEXT_PUBLIC_* подставляются при сборке только при прямом обращении:
-  // без деструктуризации process.env и без process.env[name]
+  // NEXT_PUBLIC_* are inlined at build time only on direct access:
+  // no destructuring of process.env and no process.env[name]
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
 });
 ```
 
 ```ts
-// src/shared/config/index.ts — только клиентская часть; серверная импортируется явно
+// src/shared/config/index.ts — client part only; the server part is imported explicitly
 export { clientEnv } from "./env.client";
 ```
 
-Серверный конфиг импортируется путём `@/shared/config/env.server`: так по
-импорту видно, что модуль серверный, а `server-only` сломает сборку, если он
-попадёт в клиентский бандл.
+The server config is imported as `@/shared/config/env.server`: the import
+shows the module is server-only, and `server-only` breaks the build if it ends
+up in the client bundle.
 
 ---
 
-## 5. API-клиент: request() и ошибки
+## 5. API client: request() and errors
 
-Модель `AppError` и `toAppError` — `fsd-frontend`,
-`references/conventions.md`, раздел 1. Здесь — транспорт поверх `fetch`.
+The `AppError` model and `toAppError` — `fsd-frontend`,
+`references/conventions.md`, section 1. Here — the transport over `fetch`.
 
 ```ts
 // src/shared/api/request.ts
@@ -233,7 +233,7 @@ export async function request<T>(
     throw new AppError("network", "Network error", { cause: error });
   }
 
-  // тело может быть пустым или не JSON (HTML от прокси) — это не повод терять статус
+  // the body may be empty or not JSON (HTML from a proxy) — no reason to lose the status
   const payload: unknown = await response.json().catch(() => undefined);
 
   if (!response.ok) {
@@ -263,16 +263,16 @@ function kindFromStatus(status: number): AppErrorKind {
   return "unknown";
 }
 
-// Формат ошибок полей зависит от бэкенда: опиши его схемой и разбери здесь, один раз.
+// The field error format depends on the backend: describe it with a schema and parse it here, once.
 function readFieldErrors(payload: unknown): Record<string, string> | undefined {
   void payload;
   return undefined;
 }
 ```
 
-**GraphQL** отвечает `200` и на ошибки: после `request()` проверь `errors`
-целиком и определи `kind` по `extensions.code`; по тексту сообщения — только
-если бэкенд не отдаёт кодов, в одном маппере, с тестами.
+**GraphQL** responds with `200` to errors too: after `request()` check the
+whole `errors` array and derive `kind` from `extensions.code`; by message text
+only if the backend provides no codes, in a single mapper, with tests.
 
 ```ts
 const AUTH_CODES = new Set(["UNAUTHENTICATED"]);
@@ -284,51 +284,53 @@ function graphqlErrorKind(errors: { message: string; extensions?: { code?: strin
 }
 ```
 
-Тесты на `request()` — MSW: сетевой сбой, каждый статус, пустое тело,
-HTML вместо JSON, ответ не по схеме, отмена через `AbortController`.
+Tests for `request()` use MSW: network failure, every status, empty body,
+HTML instead of JSON, a response that doesn't match the schema, abort via
+`AbortController`.
 
 ---
 
-## 6. Границы ошибок маршрутов
+## 6. Route error boundaries
 
-- `app/error.tsx` (и в сегментах, где нужен свой фолбэк) — клиентский
-  компонент с пропсами `{ error: unknown; retry: () => void }`: показывает
-  переведённое сообщение и кнопку «Повторить» (`retry()` с Next 16.2 —
-  перезапрашивает и перерисовывает сегмент; `reset()` только сбрасывает
-  состояние границы), отправляет ошибку в `reportError`. Текст ошибки
-  сервера пользователю не показывается.
-- `app/global-error.tsx` — для ошибок в корневом лейауте; рендерит свои
-  `<html>` и `<body>`.
-- `app/not-found.tsx` — для `notFound()` и несуществующих путей.
-- `loading.tsx` — только там, где сегмент реально грузит данные; скелетон
-  повторяет раскладку, а не крутит спиннер на весь экран.
-- С `cacheComponents` (по умолчанию в новых проектах) route handler и
-  страница без request-time API пререндерятся при сборке. Ответ на каждый
-  запрос — `await connection()` из `next/server` или `cookies()`/`headers()`.
-  Пример — проверка живости `/api/health`: без `connection()` она отвечает
-  результатом сборки и ничего не говорит о живом сервере.
+- `app/error.tsx` (and in segments that need their own fallback) — a client
+  component with props `{ error: unknown; retry: () => void }`: shows a
+  translated message and a "Retry" button (`retry()` since Next 16.2
+  refetches and re-renders the segment; `reset()` only resets the boundary's
+  state), and sends the error to `reportError`. The server's error text is
+  never shown to the user.
+- `app/global-error.tsx` — for errors in the root layout; renders its own
+  `<html>` and `<body>`.
+- `app/not-found.tsx` — for `notFound()` and nonexistent paths.
+- `loading.tsx` — only where the segment actually loads data; the skeleton
+  mirrors the layout rather than spinning a full-screen spinner.
+- With `cacheComponents` (the default in new projects), a route handler and a
+  page without request-time APIs are prerendered at build time. For a
+  per-request response use `await connection()` from `next/server` or
+  `cookies()`/`headers()`. Example — the `/api/health` liveness check: without
+  `connection()` it responds with the build-time result and says nothing about
+  the live server.
 
 ---
 
-## 7. Сервер и клиент: где что можно
+## 7. Server and client: what goes where
 
-| Модуль | Первая строка | Что можно |
+| Module | First line | What's allowed |
 |---|---|---|
-| Работа с секретами, cookie, серверный env | `import "server-only"` | `cookies()`, `headers()`, серверный `fetch` |
-| Компонент с состоянием, эффектами, обработчиками | `"use client"` | хуки, `window`, браузерные API |
-| Модуль, который трогает `window`/`localStorage` вне компонентов | `import "client-only"` | браузерные API |
-| Всё остальное | ничего | чистые функции, типы, серверные компоненты |
+| Works with secrets, cookies, server env | `import "server-only"` | `cookies()`, `headers()`, server-side `fetch` |
+| Component with state, effects, handlers | `"use client"` | hooks, `window`, browser APIs |
+| Module touching `window`/`localStorage` outside components | `import "client-only"` | browser APIs |
+| Everything else | nothing | pure functions, types, server components |
 
-- `"use client"` делает клиентским весь подграф импортов. Ставь его на
-  лист с интерактивом, а не на страницу.
-- В клиентский компонент из серверного передаются только сериализуемые
-  пропсы. Функции — только Server Actions.
-- Данные пользователя не кладутся в модульные переменные на сервере: модуль
-  живёт между запросами разных пользователей.
+- `"use client"` makes the whole import subgraph client-side. Put it on an
+  interactive leaf, not on the page.
+- Only serializable props are passed from a server component to a client one.
+  Functions — only Server Actions.
+- User data is never put into module variables on the server: the module lives
+  across requests from different users.
 
 ---
 
-## 8. Логи и мониторинг как порт
+## 8. Logging and monitoring as a port
 
 ```ts
 // src/shared/lib/monitoring/index.ts
@@ -338,11 +340,10 @@ export type Logger = {
 };
 ```
 
-- Реализация — в `_app` (в разработке `console`, в продакшене — сервис
-  мониторинга); на сервере инициализация — в `instrumentation.ts`.
-- Контекст — id, `kind`, имя операции. Не email, не токены, не тела
-  запросов. Тип контекста не принимает объекты, чтобы в лог нельзя было
-  целиком передать запрос или пользователя; строки с персональными данными
-  он не остановит — это на ревью.
-- Подключать Sentry и аналоги в день ноль не обязательно; порт — обязательно,
-  чтобы потом не переписывать вызовы.
+- The implementation lives in `_app` (`console` in development, a monitoring
+  service in production); on the server, initialization is in `instrumentation.ts`.
+- Context — id, `kind`, operation name. Not emails, tokens or request bodies.
+  The context type doesn't accept objects, so a whole request or user can't be
+  passed to the log; it won't stop strings with personal data — that's for review.
+- Connecting Sentry or similar on day zero is optional; the port is required,
+  so the calls don't have to be rewritten later.

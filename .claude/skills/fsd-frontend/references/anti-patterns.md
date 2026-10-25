@@ -1,23 +1,23 @@
-# Анти-паттерны
+# Anti-patterns
 
-Каталог для ревью. У каждого пункта: как выглядит, почему плохо, как
-правильно. Встретив такое в существующем коде — не копируй, а сообщи.
+A catalog for reviews. Each item: what it looks like, why it's bad, how to do
+it right. If you meet one in existing code, don't copy it; report it.
 
-## Архитектура и зависимости
+## Architecture and dependencies
 
-### 1. Cross-import между слайсами одного слоя
+### 1. Cross-import between slices of the same layer
 
 ```ts
 // ✗ features/task-board/ui/card.tsx
 import { useEditTaskDialog } from "@/features/edit-task";
 ```
 
-Фичи сцеплены: нельзя изменить или протестировать одну без другой, растёт
-риск циклов. **Правильно:** контракт `editCard` в `deps` фичи доски, связывание
-в странице (DI-reference, разделы 5–6). Если две фичи всегда меняются
-вместе — объедини их в одну.
+The features are coupled: you can't change or test one without the other, and
+the risk of cycles grows. **Right:** an `editCard` contract in the board
+feature's `deps`, wired in the page (DI reference, sections 5–6). If two
+features always change together, merge them into one.
 
-### 2. Скрытая зависимость в нереактивной логике
+### 2. Hidden dependency in non-reactive logic
 
 ```ts
 // ✗
@@ -28,16 +28,16 @@ export const createBoardStore = (board: Board) =>
   }));
 ```
 
-По сигнатуре не видно, что стору нужна сеть; тест требует `vi.mock`.
-**Правильно:** `createBoardStore(board, getDeps)` и `getDeps().saveBoard(board)`.
+The signature doesn't show that the store needs the network; the test requires
+`vi.mock`. **Right:** `createBoardStore(board, getDeps)` and `getDeps().saveBoard(board)`.
 
-### 3. Наполовину внедрённые зависимости
+### 3. Half-injected dependencies
 
-Часть зависимостей приходит через `deps`, часть импортируется напрямую в
-том же сторе. Получаешь худшее из двух миров: и косвенность, и скрытую связь.
-**Правильно:** вся внешняя логика фабрики — через один контракт.
+Some dependencies come through `deps`, others are imported directly in the
+same store. You get the worst of both worlds: indirection and a hidden
+coupling. **Right:** all of the factory's external logic goes through one contract.
 
-### 4. Контракт в терминах поставщика
+### 4. Contract in the provider's terms
 
 ```ts
 // ✗ features/task-board/model/deps.ts
@@ -45,121 +45,119 @@ import type { Task } from "@/entities/task";
 type TaskBoardDeps = { updateTask: (task: Task) => Promise<Task> };
 ```
 
-Фича доски теперь знает про задачи и не переиспользуется для других
-карточек. **Правильно:** `editCard(cardId) => Promise<BoardCard | null>`;
-маппинг `Task → BoardCard` — в адаптере страницы.
+The board feature now knows about tasks and can't be reused for other cards.
+**Right:** `editCard(cardId) => Promise<BoardCard | null>`; the `Task → BoardCard`
+mapping lives in the page's adapter.
 
-### 5. Контракт спрятан или размазан
+### 5. Hidden or scattered contract
 
 ```ts
-// ✗ deps.ts не объявляет контракт, а переиспользует тип стора
+// ✗ deps.ts doesn't declare a contract but reuses the store's type
 import type { BoardCardStore } from "./board.store";
 export const boardDepsContext = createStrictContext<BoardCardStore>();
-// ✗ а фабрика стора при этом принимает ещё три зависимости отдельными аргументами
+// ✗ while the store factory takes three more dependencies as separate arguments
 ```
 
-Чтобы понять, что нужно слайсу снаружи, приходится читать стор и провайдер.
-**Правильно:** один явный контракт в `model/deps.ts` слайса-потребителя с
-JSDoc; стор, провайдер, фейк и адаптер ссылаются на этот тип.
+To understand what the slice needs from outside, you have to read the store
+and the provider. **Right:** one explicit contract in the consumer slice's
+`model/deps.ts` with JSDoc; the store, provider, fake and adapter refer to that type.
 
-### 6. Преждевременный вынос и «слайсы на будущее»
+### 6. Premature extraction and "slices for the future"
 
-`entities/comment` с одним потребителем; `features/x` с пустыми `api/`,
-`lib/`, `config/`; виджет, который просто ставит две фичи рядом.
-**Правильно:** код живёт в странице, пока не появился второй реальный
-потребитель; сегменты появляются по необходимости; композиция — в `pages`.
+`entities/comment` with a single consumer; `features/x` with empty `api/`,
+`lib/`, `config/`; a widget that just puts two features side by side.
+**Right:** the code lives in the page until a second real consumer appears;
+segments appear as needed; composition lives in `pages`.
 
-### 7. Божественный слайс
+### 7. God slice
 
-`features/board` делает перетаскивание, права доступа, редактирование
-задач, поиск и экспорт. **Правильно:** слайс на сценарий: `move-card`,
-`manage-board-access`, `edit-task`, `search-board`.
+`features/board` does drag and drop, access control, task editing, search and
+export. **Right:** a slice per scenario: `move-card`, `manage-board-access`,
+`edit-task`, `search-board`.
 
-### 8. DI ради DI
+### 8. DI for DI's sake
 
-Контекст + провайдер + фейк ради значения, нужного одному дочернему
-компоненту. **Правильно:** пропс. Контекст — когда зависимость нужна
-глубоко или многим.
+Context + provider + fake for a value needed by one child component.
+**Right:** a prop. Context is for when the dependency is needed deep down or by
+many.
 
-## Логика и состояние
+## Logic and state
 
-### 9. Один побочный эффект — два владельца
+### 9. One side effect, two owners
 
 ```ts
-// ✗ хук спрашивает подтверждение и вызывает store.removeColumn,
-//   который тоже спрашивает подтверждение
+// ✗ the hook asks for confirmation and calls store.removeColumn,
+//   which also asks for confirmation
 ```
 
-Пользователь видит два диалога; поведение зависит от того, через какой путь
-вызвали. **Правильно:** у эффекта один владелец — UX-решения в хуке, стор
-чистый.
+The user sees two dialogs; behavior depends on which path was used.
+**Right:** an effect has one owner — UX decisions in the hook, the store is pure.
 
-### 10. Тексты и UX внутри стора
+### 10. Copy and UX inside the store
 
 ```ts
 // ✗
 removeColumn: async (id) => {
-  if (!(await getConfirmation({ title: "Удаление колонки" }))) return;
+  if (!(await getConfirmation({ title: "Delete column" }))) return;
   // ...
 }
 ```
 
-Стор нельзя переиспользовать без диалога, тексты обходят i18n.
-**Правильно:** хук `useRemoveColumn` — confirm + перевод + обработка ошибки;
-стор — только изменение и сохранение.
+The store can't be reused without the dialog, and the copy bypasses i18n.
+**Right:** a `useRemoveColumn` hook — confirm + translation + error handling;
+the store only changes and saves.
 
-### 11. Серверные данные, вручную скопированные в стор
+### 11. Server data manually copied into a store
 
 ```ts
-// ✗ после каждой мутации
+// ✗ after every mutation
 set({ tasks: await api.getTasks() });
 ```
 
-Лишние запросы, гонки, ручная синхронизация, нет loading/error.
-**Правильно:** кэш запросов + инвалидация (state-and-data.md, раздел 3).
+Extra requests, races, manual sync, no loading/error.
+**Right:** a query cache + invalidation (state-and-data.md, section 3).
 
-### 12. Оптимистичное обновление без отката
+### 12. Optimistic update without rollback
 
 ```ts
 // ✗
 set({ board: next });
-await api.updateBoard(next); // упало — UI врёт
+await api.updateBoard(next); // failed — the UI lies
 ```
 
-**Правильно:** `commit(next, persist)` с откатом и пробросом ошибки, или
-перезапрос с сервера.
+**Right:** `commit(next, persist)` with rollback and rethrowing the error, or a
+refetch from the server.
 
-### 13. Сохранение агрегата целиком
+### 13. Saving the whole aggregate
 
-`PUT /boards/:id` со всей доской после каждого перетаскивания — правки двух
-пользователей затирают друг друга. **Правильно:** гранулярные команды
-(`moveCard`), а если бэкенд не умеет — зафиксировать ограничение.
+`PUT /boards/:id` with the whole board after every drag — two users' edits
+overwrite each other. **Right:** granular commands (`moveCard`); if the
+backend can't do that, record the limitation.
 
-### 14. Селектор строит новую структуру
+### 14. Selector builds a new structure
 
 ```ts
-// ✗ новый объект на каждый вызов, O(n) на каждую строку списка
+// ✗ a new object on every call, O(n) per list row
 const assignee = useUsers((state) => state.usersMap()[card.assigneeId]);
 ```
 
-**Правильно:** выбирать исходные данные и вычислять мемоизированно; или
-селектор, возвращающий конкретный элемент: `state.users.find(...)`;
-для списков — индекс считается один раз выше по дереву.
+**Right:** select the source data and compute with memoization; or a selector
+that returns a specific element: `state.users.find(...)`; for lists, the index
+is computed once higher up the tree.
 
-### 15. Индекс отфильтрованного списка как координата
+### 15. Index of a filtered list as a coordinate
 
 ```tsx
-// ✗ список отфильтрован поиском, а индекс передаётся в moveCard как позиция в исходной колонке
+// ✗ the list is filtered by search, but the index is passed to moveCard as a position in the original column
 {cards.filter(matches).map((card, index) => <Draggable index={index} … />)}
 onDragEnd={(e) => moveCard({ colId, index: e.source.index }, …)}
 ```
 
-При активном фильтре перемещается не та карточка. **Правильно:** адресовать
-по id (`moveCard(cardId, target)`), а целевую позицию пересчитывать из
-отфильтрованного представления в исходное; или запрещать перетаскивание
-при активном фильтре.
+With an active filter, the wrong card moves. **Right:** address by id
+(`moveCard(cardId, target)`) and translate the target position from the
+filtered view to the original; or disable dragging while a filter is active.
 
-### 16. Хук, который не хук
+### 16. A hook that isn't a hook
 
 ```ts
 // ✗
@@ -168,86 +166,84 @@ export function useCanUserAccessBoard() {
 }
 ```
 
-Чистую функцию нельзя вызвать вне компонента, а правило выглядит как
-React-специфичное. **Правильно:** `isBoardMember(board, userId)` в модели
-сущности.
+A pure function can't be called outside a component, and the rule looks
+React-specific. **Right:** `isBoardMember(board, userId)` in the entity's model.
 
-### 17. Одно правило в нескольких местах
+### 17. One rule in several places
 
-«Участник доски = владелец или редактор» описано в ability страницы, в
-ability списка досок и в хуке фичи. Изменение правила — три правки и баг в
-четвёртом месте. **Правильно:** одна функция в `entities/board/model/access.ts`.
+"Board member = owner or editor" is described in the page's ability, in the
+board list's ability and in a feature hook. Changing the rule means three edits
+and a bug in a fourth place. **Right:** one function in `entities/board/model/access.ts`.
 
-## Ошибки и async
+## Errors and async
 
-### 18. Проглатывание ошибок
+### 18. Swallowing errors
 
 ```ts
 // ✗
-api.setTheme({ theme }).catch();          // ничего не ловит
-try { ... } catch { return {}; }          // сбой выглядит как «нет данных»
-promise.finally(stop).catch(() => {});    // молча
-if (!session) throw new Error();          // без сообщения
+api.setTheme({ theme }).catch();          // catches nothing
+try { ... } catch { return {}; }          // a failure looks like "no data"
+promise.finally(stop).catch(() => {});    // silently
+if (!session) throw new Error();          // no message
 ```
 
-**Правильно:** обработать осмысленно (откат + сообщение пользователю +
-репорт) или пробросить; сообщения у ошибок обязательны.
+**Right:** handle meaningfully (rollback + message to the user + report) or
+rethrow; errors must have messages.
 
-### 19. Небезопасный разбор ошибки
+### 19. Unsafe error parsing
 
 ```ts
-// ✗ падает с TypeError при сетевой ошибке — response нет
+// ✗ throws a TypeError on a network error — there is no response
 if (error.response.status === 401) …
 ```
 
-**Правильно:** нормализация в `AppError` на границе API, дальше — `kind`.
+**Right:** normalize into `AppError` at the API boundary, then use `kind`.
 
-### 20. Интерсепторы и подписки без cleanup
+### 20. Interceptors and subscriptions without cleanup
 
-Регистрация в `useEffect` без `eject`/`off` → при повторном монтировании
-(StrictMode, HMR) обработчики дублируются. **Правильно:** сохранить id и
-снять в cleanup.
+Registering in `useEffect` without `eject`/`off` → on remount (StrictMode,
+HMR) handlers are duplicated. **Right:** keep the id and remove it in cleanup.
 
-## Код
+## Code
 
-### 21. Побочные эффекты при импорте модуля
+### 21. Side effects on module import
 
 ```ts
 // ✗ shared/api/client.ts
 window.api = api;
 ```
 
-**Правильно:** импорт без эффектов; отладочные хелперы — явной
-инициализацией в `app`, только в dev.
+**Right:** imports without effects; debug helpers via explicit initialization
+in `app`, dev only.
 
-### 22. Захардкоженные окружение и тексты
+### 22. Hardcoded environment and copy
 
 ```ts
 // ✗
 io("ws://localhost:3334");
-<h2>Все доски</h2>
+<h2>All boards</h2>
 ```
 
-**Правильно:** `env.wsUrl` из `shared/config`; `t("boards.title")`.
+**Right:** `env.wsUrl` from `shared/config`; `t("boards.title")`.
 
-### 23. Опечатки и неточные имена в API
+### 23. Typos and imprecise names in the API
 
 `Ablity`, `createModuleAblility`, `useApplayAppInterceptor`,
-`removeTask(userId)` (параметр — id задачи). **Правильно:** имена
-проверяются как код; параметр называется тем, что в нём лежит.
+`removeTask(userId)` (the parameter is a task id). **Right:** names are
+checked like code; a parameter is named for what it holds.
 
-### 24. Мёртвый код и «на всякий случай»
+### 24. Dead code and "just in case"
 
-Неиспользуемые хуки, пустые `index.ts`, лишние поля в состоянии, не
-описанные в типе, значения конфига, которые при выборе бросают «not
-implemented». **Правильно:** удалять. История есть в git.
+Unused hooks, empty `index.ts`, extra state fields not described in the type,
+config values that throw "not implemented" when chosen. **Right:** delete.
+Git keeps the history.
 
-### 25. Мусор в разметке
+### 25. Junk in markup
 
 ```tsx
-// ✗ лишний ";" рендерится как текст
+// ✗ the extra ";" renders as text
 <form onSubmit={submit}>{children}</form>;
 ```
 
-Такие ошибки ловят компонентные тесты по видимому тексту и внимательное
-ревью JSX внутри скобок.
+Component tests on visible text and careful review of JSX inside parentheses
+catch such mistakes.

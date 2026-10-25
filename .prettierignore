@@ -6,5 +6,5 @@ playwright-report
 test-results
 pnpm-lock.yaml
 next-env.d.ts
-# скиллы синхронизируются с внешним набором и форматируются там
+# skills are synced with an external set and formatted there
 .claude

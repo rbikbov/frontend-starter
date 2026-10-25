@@ -1,23 +1,23 @@
-# Авторизация в Next.js: код
+# Authentication in Next.js: code
 
-Примеры для модели «BFF + HttpOnly-cookie» (SKILL.md, раздел 1) и раскладки
-из `frontend-bootstrap` (корневой `app/` — маршруты, `src/` — FSD). Модель
-ошибок `AppError` — из `fsd-frontend`. Имена и пути адаптируй к проекту.
+Examples for the "BFF + HttpOnly cookie" model (SKILL.md, section 1) and the
+layout from `frontend-bootstrap` (root `app/` — routes, `src/` — FSD). The
+`AppError` error model comes from `fsd-frontend`. Adapt names and paths to the project.
 
-## Содержание
+## Contents
 
-1. [Где что лежит](#1-где-что-лежит)
-2. [Cookie сессии](#2-cookie-сессии)
+1. [What goes where](#1-what-goes-where)
+2. [Session cookies](#2-session-cookies)
 3. [Route handlers: login, refresh, logout](#3-route-handlers-login-refresh-logout)
-4. [Клиент: перехватчик с single-flight refresh](#4-клиент-перехватчик-с-single-flight-refresh)
-5. [proxy.ts: оптимистичная проверка](#5-proxyts-оптимистичная-проверка)
+4. [Client: interceptor with single-flight refresh](#4-client-interceptor-with-single-flight-refresh)
+5. [proxy.ts: optimistic check](#5-proxyts-optimistic-check)
 6. [Data Access Layer](#6-data-access-layer)
-7. [Безопасный редирект и тесты](#7-безопасный-редирект-и-тесты)
-8. [Страница по ссылке с токеном](#8-страница-по-ссылке-с-токеном)
+7. [Safe redirect and tests](#7-safe-redirect-and-tests)
+8. [Page opened from a link with a token](#8-page-opened-from-a-link-with-a-token)
 
 ---
 
-## 1. Где что лежит
+## 1. What goes where
 
 ```text
 app/api/auth/login/route.ts         export { loginHandler as POST } from "@/shared/api/session/server"
@@ -25,23 +25,24 @@ app/api/auth/refresh/route.ts       export { refreshHandler as POST } from "@/sh
 app/api/auth/logout/route.ts        export { logoutHandler as POST } from "@/shared/api/session/server"
 proxy.ts
 src/shared/api/session/
-├── cookies.ts                      server-only: имена, set/clear
+├── cookies.ts                      server-only: names, set/clear
 ├── handlers.ts                     server-only: login/refresh/logout
 ├── dal.ts                          server-only: getSession, requireSession
-├── server.ts                       public API серверной части
-├── authorized-fetch.ts             клиентский перехватчик (фабрика с deps)
-├── is-unauthorized.ts              определение 401 (HTTP и GraphQL)
-└── index.ts                        public API клиентской части
-src/shared/lib/url/safe-redirect.ts getSafeRedirect + тесты
-src/_app/providers/session.tsx      сборка authorizedFetch с реализациями deps
+├── server.ts                       public API of the server part
+├── authorized-fetch.ts             client interceptor (factory with deps)
+├── is-unauthorized.ts              detecting 401 (HTTP and GraphQL)
+└── index.ts                        public API of the client part
+src/shared/lib/url/safe-redirect.ts getSafeRedirect + tests
+src/_app/providers/session.tsx      wires authorizedFetch with deps implementations
 ```
 
-Серверная и клиентская части экспортируются разными входами (`server.ts` и
-`index.ts`), чтобы клиентский импорт не тянул `server-only` модули.
+The server and client parts are exported through different entry points
+(`server.ts` and `index.ts`) so that a client import doesn't pull in
+`server-only` modules.
 
 ---
 
-## 2. Cookie сессии
+## 2. Session cookies
 
 ```ts
 // src/shared/api/session/cookies.ts
@@ -51,7 +52,7 @@ import { serverEnv } from "@/shared/config/env.server";
 
 const isProd = serverEnv.NODE_ENV === "production";
 
-// __Host- требует Secure; на http в разработке используем имена без префикса
+// __Host- requires Secure; over http in development use names without the prefix
 export const SESSION_COOKIES = {
   access: isProd ? "__Host-access" : "access",
   refresh: isProd ? "__Host-refresh" : "refresh",
@@ -73,8 +74,8 @@ export async function clearSessionCookies() {
   store.delete(SESSION_COOKIES.refresh);
 }
 
-// exp читается без проверки подписи: он задаёт только срок жизни cookie, не доступ.
-// Если токены непрозрачные — бери срок из ответа бэкенда (expiresIn).
+// exp is read without verifying the signature: it only sets the cookie lifetime, not access.
+// If tokens are opaque, take the lifetime from the backend response (expiresIn).
 function tokenExpiry(jwt: string): Date | undefined {
   const payload = jwt.split(".")[1];
   if (!payload) return undefined;
@@ -96,7 +97,7 @@ import { z } from "zod";
 import { serverEnv } from "@/shared/config/env.server";
 import { reportError } from "@/shared/lib/monitoring";
 import { AppError, toAppError } from "../app-error";
-import { backendAuth } from "../backend-auth"; // вызовы auth-эндпоинтов бэкенда
+import { backendAuth } from "../backend-auth"; // calls to the backend's auth endpoints
 import { clearSessionCookies, SESSION_COOKIES, setSessionCookies } from "./cookies";
 
 const LoginBody = z.object({ email: z.email(), password: z.string().min(1) });
@@ -127,7 +128,7 @@ export async function refreshHandler(request: NextRequest) {
     return json({ ok: true }, 200);
   } catch (error) {
     const appError = toAppError(error);
-    // Бэкенд отклонил токен — сессии больше нет. Бэкенд недоступен — сессию не трогаем.
+    // Backend rejected the token — the session is gone. Backend unavailable — leave the session alone.
     if (appError.kind === "unauthorized" || appError.kind === "validation") {
       await clearSessionCookies();
       return json({ kind: "unauthorized" }, 401);
@@ -143,7 +144,7 @@ export async function logoutHandler(request: NextRequest) {
   try {
     if (refreshToken) await backendAuth.logout(refreshToken, clientContext(request));
   } catch (error) {
-    // отзыв не удался — cookie всё равно удаляем, пользователь должен выйти
+    // revocation failed — delete the cookies anyway, the user must be signed out
     reportError(error);
   } finally {
     await clearSessionCookies();
@@ -167,21 +168,21 @@ function errorResponse(error: AppError) {
     network: 503, unauthorized: 401, forbidden: 403, "not-found": 404,
     validation: 422, conflict: 409, aborted: 499, unknown: 502,
   };
-  // fieldErrors — коды полей, а не тексты бэкенда; тексты переводит UI
+  // fieldErrors are field codes, not backend texts; the UI translates them
   return json({ kind: error.kind, fieldErrors: error.details.fieldErrors }, status[error.kind]);
 }
 
 const json = (body: unknown, status: number) => NextResponse.json(body, { status });
 ```
 
-`reportError` — порт мониторинга (`frontend-bootstrap`,
-`references/next-structure.md`, раздел 8); `serverEnv.APP_URL` — публичный
-адрес приложения из серверного конфига. Для `429` добавь в ответ
-`Retry-After`, если бэкенд его отдал.
+`reportError` is the monitoring port (`frontend-bootstrap`,
+`references/next-structure.md`, section 8); `serverEnv.APP_URL` is the app's
+public URL from the server config. For `429`, add `Retry-After` to the
+response if the backend provided it.
 
 ---
 
-## 4. Клиент: перехватчик с single-flight refresh
+## 4. Client: interceptor with single-flight refresh
 
 ```ts
 // src/shared/api/session/is-unauthorized.ts
@@ -189,7 +190,7 @@ type GraphqlError = { extensions?: { code?: string } };
 
 export async function isUnauthorizedResponse(response: Response): Promise<boolean> {
   if (response.status === 401) return true;
-  // GraphQL отвечает 200 и на ошибки авторизации
+  // GraphQL responds with 200 to auth errors too
   const body: unknown = await response.clone().json().catch(() => null);
   const errors = (body as { errors?: GraphqlError[] } | null)?.errors;
   return Array.isArray(errors) && errors.some((e) => e.extensions?.code === "UNAUTHENTICATED");
@@ -201,9 +202,9 @@ export async function isUnauthorizedResponse(response: Response): Promise<boolea
 import { AppError } from "../app-error";
 
 export type AuthorizedFetchDeps = {
-  /** true — выдана новая пара; false — бэкенд отклонил refresh; throw — сеть/5xx. */
+  /** true — a new pair was issued; false — the backend rejected the refresh; throw — network/5xx. */
   refreshSession: () => Promise<boolean>;
-  /** Сессия потеряна: очистить кэш и сторы, увести на вход. */
+  /** Session lost: clear the cache and stores, go to sign-in. */
   onSessionExpired: () => void;
   isUnauthorized: (response: Response) => Promise<boolean>;
 };
@@ -213,7 +214,7 @@ export function createAuthorizedFetch(deps: AuthorizedFetchDeps) {
   let loggingOut = false;
   let expired = false;
 
-  // все ждущие получают результат одного refresh
+  // all waiters get the result of a single refresh
   const refreshOnce = () => {
     refreshing ??= deps
       .refreshSession()
@@ -227,7 +228,7 @@ export function createAuthorizedFetch(deps: AuthorizedFetchDeps) {
     return refreshing;
   };
 
-  // несколько упавших запросов — один выход на страницу входа
+  // several failed requests — a single redirect to sign-in
   const expireOnce = () => {
     if (expired) return;
     expired = true;
@@ -242,7 +243,7 @@ export function createAuthorizedFetch(deps: AuthorizedFetchDeps) {
     try {
       refreshed = await refreshOnce();
     } catch (error) {
-      // временный сбой — не повод разлогинивать
+      // a transient failure is no reason to sign out
       throw new AppError("network", "Session refresh failed", { cause: error });
     }
 
@@ -251,7 +252,7 @@ export function createAuthorizedFetch(deps: AuthorizedFetchDeps) {
       return response;
     }
 
-    // один повтор; второй 401 — сессия потеряна, без нового refresh
+    // one retry; a second 401 means the session is lost, no new refresh
     const retried = await fetch(input, { ...init, credentials: "include" });
     if (await deps.isUnauthorized(retried)) expireOnce();
     return retried;
@@ -259,7 +260,7 @@ export function createAuthorizedFetch(deps: AuthorizedFetchDeps) {
 
   return {
     authorizedFetch,
-    /** Вызвать до запроса logout и снять, если logout не удался. */
+    /** Set before the logout request and unset if logout failed. */
     setLoggingOut: (value: boolean) => {
       loggingOut = value;
     },
@@ -268,7 +269,7 @@ export function createAuthorizedFetch(deps: AuthorizedFetchDeps) {
 ```
 
 ```tsx
-// src/_app/providers/session.tsx — реализации deps видны только здесь
+// src/_app/providers/session.tsx — deps implementations are visible only here
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -280,7 +281,7 @@ export function useAuthorizedFetchSetup() {
 
   return useState(() =>
     createAuthorizedFetch({
-      // refresh идёт обычным fetch, мимо перехватчика
+      // refresh uses plain fetch, bypassing the interceptor
       refreshSession: async () => {
         const response = await fetch("/api/auth/refresh", { method: "POST" });
         if (response.ok) return true;
@@ -298,28 +299,28 @@ export function useAuthorizedFetchSetup() {
 }
 ```
 
-`request()` из `frontend-bootstrap` получает `authorizedFetch` вместо
-глобального `fetch` (параметром или через порт) — так остальной код не знает
-про refresh.
+`request()` from `frontend-bootstrap` gets `authorizedFetch` instead of the
+global `fetch` (as a parameter or through a port), so the rest of the code
+doesn't know about refresh.
 
 ---
 
-## 5. proxy.ts: оптимистичная проверка
+## 5. proxy.ts: optimistic check
 
 ```ts
-// proxy.ts (Next 16+; в Next 15 — middleware.ts с функцией middleware)
+// proxy.ts (Next 16+; in Next 15 — middleware.ts with a middleware function)
 import { NextResponse, type NextRequest } from "next/server";
 
 const PROTECTED = ["/app"];
 const AUTH_ONLY_FOR_GUESTS = ["/sign-in", "/sign-up"];
-// имена cookie держи в одном модуле без server-only, чтобы импортировать и сюда
+// keep cookie names in one module without server-only so it can be imported here too
 const REFRESH_COOKIES = ["__Host-refresh", "refresh"];
 
 const matches = (pathname: string, routes: string[]) =>
   routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
 export default function proxy(request: NextRequest) {
-  // refresh, а не access: access мог истечь, а сессия жива
+  // refresh, not access: access may have expired while the session is alive
   const hasSession = REFRESH_COOKIES.some((name) => request.cookies.has(name));
   const { pathname, search } = request.nextUrl;
 
@@ -341,8 +342,8 @@ export const config = {
 };
 ```
 
-Это не защита данных: тот же запрос без cookie к route handler или Server
-Action должен быть отклонён там (раздел 6).
+This doesn't protect data: the same request without cookies to a route
+handler or Server Action must be rejected there (section 6).
 
 ---
 
@@ -358,11 +359,11 @@ import { SESSION_COOKIES } from "./cookies";
 
 export type Session = { accessToken: string };
 
-// cache — дедупликация в пределах одного рендера; в handlers и actions не действует
+// cache deduplicates within a single render; it has no effect in handlers and actions
 export const getSession = cache(async (): Promise<Session | null> => {
   const accessToken = (await cookies()).get(SESSION_COOKIES.access)?.value;
-  // Подпись проверяется, если бэкенд публикует ключи (JWKS + jose).
-  // Иначе здесь только наличие, а проверка — на бэкенде при каждом запросе.
+  // The signature is verified if the backend publishes keys (JWKS + jose).
+  // Otherwise only presence is checked here, and verification happens on the backend for every request.
   return accessToken ? { accessToken } : null;
 });
 
@@ -373,19 +374,19 @@ export async function requireSession(): Promise<Session> {
 }
 ```
 
-Серверный запрос к API от имени пользователя явно передаёт токен
-(`Authorization: Bearer` или cookie) — серверный `fetch` не отправляет cookie
-браузера сам.
+A server-side API request on behalf of the user passes the token explicitly
+(`Authorization: Bearer` or a cookie): a server-side `fetch` doesn't send the
+browser's cookies on its own.
 
 ---
 
-## 7. Безопасный редирект и тесты
+## 7. Safe redirect and tests
 
 ```ts
 // src/shared/lib/url/safe-redirect.ts
 /**
- * Возвращает путь внутри приложения или fallback.
- * Результат — всегда относительный путь, его можно передать в router или location.
+ * Returns a path inside the app, or the fallback.
+ * The result is always a relative path that can be passed to the router or location.
  */
 export function getSafeRedirect(
   raw: string | null | undefined,
@@ -393,15 +394,15 @@ export function getSafeRedirect(
   appOrigin: string,
 ): string {
   if (!raw) return fallback;
-  // Браузеры превращают "\" в "/" и выбрасывают табы и переводы строк:
-  // "/\evil.com" и "/\t/evil.com" становятся "//evil.com"
+  // Browsers turn "\" into "/" and drop tabs and newlines:
+  // "/\evil.com" and "/\t/evil.com" become "//evil.com"
   if (/[\\\u0000-\u001F\u007F]/.test(raw)) return fallback;
 
   let url: URL;
   try {
     url = new URL(raw, appOrigin);
   } catch {
-    return fallback; // не URL — значит, не путь приложения
+    return fallback; // not a URL, so not an app path
   }
   if (url.origin !== new URL(appOrigin).origin) return fallback;
   return url.pathname + url.search + url.hash;
@@ -416,7 +417,7 @@ const safe = (raw: string | null) => getSafeRedirect(raw, "/app", origin);
 it.each([
   ["/texts/1?tab=notes", "/texts/1?tab=notes"],
   ["https://app.example.com/texts", "/texts"],
-])("принимает путь приложения %s", (raw, expected) => {
+])("accepts the app path %s", (raw, expected) => {
   expect(safe(raw)).toBe(expected);
 });
 
@@ -430,17 +431,17 @@ it.each([
   "/\n/evil.com",
   "https://evil.com",
   "https://app.example.com.evil.com",
-  "http://app.example.com/texts", // другой протокол — другой origin
+  "http://app.example.com/texts", // a different protocol is a different origin
   "javascript:alert(1)",
   "data:text/html,<script>alert(1)</script>",
-])("отклоняет %s", (raw) => {
+])("rejects %s", (raw) => {
   expect(safe(raw)).toBe("/app");
 });
 ```
 
 ---
 
-## 8. Страница по ссылке с токеном
+## 8. Page opened from a link with a token
 
 ```tsx
 // src/_pages/password-reset/ui/password-reset-page.tsx
@@ -454,11 +455,11 @@ export function PasswordResetPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // читаем один раз; дальше токен живёт только в состоянии
+  // read once; after that the token lives only in state
   const [token] = useState(() => searchParams.get("token"));
 
   useEffect(() => {
-    // убираем токен из адресной строки и истории
+    // remove the token from the address bar and history
     if (searchParams.has("token")) router.replace(pathname);
   }, [pathname, router, searchParams]);
 
@@ -468,9 +469,9 @@ export function PasswordResetPage() {
 ```
 
 ```ts
-// next.config.ts (фрагмент headers()): без Referer и с этой страницы
+// next.config.ts (headers() fragment): no Referer from this page either
 { source: "/password-reset", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] }
 ```
 
-Страница с `useSearchParams` оборачивается в `<Suspense>` в месте
-использования — иначе сборка уводит весь маршрут в клиентский рендер.
+A page using `useSearchParams` is wrapped in `<Suspense>` where it is used;
+otherwise the build moves the whole route to client rendering.

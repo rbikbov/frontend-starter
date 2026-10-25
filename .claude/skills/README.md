@@ -1,30 +1,30 @@
-# Скиллы для фронтенда
+# Frontend skills
 
-Набор для ведения фронтенд-проекта на Next.js + TypeScript.
-Скиллы независимы: лишний можно удалить, остальные продолжат работать.
-Ссылки между ними мягкие («если в проекте есть скилл X») — без адресата
-агент просто пропустит ссылку.
+A set for running a Next.js + TypeScript frontend project.
+The skills are independent: you can delete one and the rest keep working.
+Links between them are soft ("if the project has skill X"), so without the
+target the agent simply skips the reference.
 
-| Скилл | Когда срабатывает | Ссылается на |
+| Skill | When it triggers | Refers to |
 |---|---|---|
-| `fsd-frontend` | Пишешь или ревьюишь код: слои FSD, DI, состояние, ошибки, тесты | — |
-| `frontend-bootstrap` | Создаёшь проект или закладываешь фундамент: структура Next + FSD, конфиги, env, API-клиент, CI | `fsd-frontend`, `frontend-auth-session`, `anti-slop-review` |
-| `frontend-auth-session` | Вход, регистрация, восстановление пароля, защищённые страницы, refresh токена | `fsd-frontend`, `frontend-bootstrap` |
-| `anti-slop-review` | Перед коммитом, PR или публикацией; ревью кода, написанного с ИИ | — |
-| `feature-workflow` | Фича или заметное изменение поведения: PRD → спецификация → задачи → tracer bullet → тест сначала → ревью → браузер | `fsd-frontend`, `anti-slop-review`, `frontend-auth-session` |
-| `adr-writer` | Записываешь архитектурное решение | — |
+| `fsd-frontend` | Writing or reviewing code: FSD layers, DI, state, errors, tests | — |
+| `frontend-bootstrap` | Creating a project or laying the foundation: Next + FSD structure, configs, env, API client, CI | `fsd-frontend`, `frontend-auth-session`, `anti-slop-review` |
+| `frontend-auth-session` | Sign-in, sign-up, password recovery, protected pages, token refresh | `fsd-frontend`, `frontend-bootstrap` |
+| `anti-slop-review` | Before a commit, PR or publishing; reviewing AI-assisted code | — |
+| `feature-workflow` | A feature or a noticeable behavior change: PRD → spec → tasks → tracer bullet → test first → review → browser | `fsd-frontend`, `anti-slop-review`, `frontend-auth-session` |
+| `adr-writer` | Recording an architecture decision | — |
 
-## Что удалять
+## What to delete
 
-- Нет авторизации → `frontend-auth-session`.
-- Проект уже стоит на ногах → `frontend-bootstrap` больше не нужен для
-  ежедневной работы, но полезен как чек-лист при аудите.
-- Не Next.js → `frontend-bootstrap` и `frontend-auth-session` написаны под
-  него; `fsd-frontend` и `anti-slop-review` от фреймворка не зависят.
-- ADR не ведутся → `adr-writer`.
+- No authentication → `frontend-auth-session`.
+- The project is already on its feet → `frontend-bootstrap` is no longer
+  needed for daily work, but is useful as an audit checklist.
+- Not Next.js → `frontend-bootstrap` and `frontend-auth-session` are written
+  for it; `fsd-frontend` and `anti-slop-review` don't depend on the framework.
+- No ADRs → `adr-writer`.
 
-## Источник
+## Source
 
-`adr-writer` взят из
+`adr-writer` is taken from
 [kfreiman/engineer-challenge](https://github.com/kfreiman/engineer-challenge/blob/master/.agents/skills/adr-writer/SKILL.md)
-без изменений.
+unchanged.

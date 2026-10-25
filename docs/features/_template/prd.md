@@ -1,34 +1,34 @@
-# PRD: <название фичи>
+# PRD: <feature name>
 
-Статус: черновик · Дата: YYYY-MM-DD · Автор: <имя>
+Status: draft · Date: YYYY-MM-DD · Author: <name>
 
-<!-- Что и зачем, без «как»: никаких библиотек, файлов и схем. Утверждает человек. -->
+<!-- What and why, without "how": no libraries, files or schemas. Approved by a human. -->
 
-## Цель
+## Goal
 
-<1–2 предложения: какую проблему пользователя решаем и как поймём, что решили.>
+<1–2 sentences: which user problem we solve and how we will know it is solved.>
 
-## Сценарии
+## Scenarios
 
-- Как <кто>, я хочу <что>, чтобы <зачем>.
+- As a <who>, I want <what>, so that <why>.
 
-## Входит
-
-- …
-
-## Не входит (Non-Goals)
-
-<!-- Обязательно. Всё, что захочется сделать «заодно»: анимации, новые размеры экранов,
-     i18n, кэширование, админка, рефакторинг соседнего кода. -->
+## In scope
 
 - …
 
-## Критерии готовности
+## Non-Goals
 
-- Дано <состояние>, когда <действие>, тогда <наблюдаемый результат>.
+<!-- Required. Everything you'll be tempted to do "while at it": animations, new screen sizes,
+     i18n, caching, admin panels, refactoring nearby code. -->
 
-## Открытые вопросы
+- …
 
-<!-- Допущения агента, которые человек подтверждает или правит при утверждении. -->
+## Acceptance criteria
+
+- Given <state>, when <action>, then <observable result>.
+
+## Open questions
+
+<!-- Agent assumptions that a human confirms or corrects during approval. -->
 
 - …

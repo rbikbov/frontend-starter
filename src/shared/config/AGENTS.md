@@ -1,11 +1,11 @@
-# src/shared/config — переменные окружения
+# src/shared/config — environment variables
 
-- Единственное место, где читается `process.env` (остальной код это запрещает линтер).
-- `clientEnv` — `NODE_ENV` и `NEXT_PUBLIC_*`. Они встраиваются в бандл при сборке и только
-  при прямом обращении: `process.env.NEXT_PUBLIC_X`, без деструктуризации и
-  `process.env[name]`.
-- Серверные переменные и секреты — в отдельном `env.server.ts`, который создаётся с первой
-  такой переменной:
+- The only place where `process.env` is read (the linter forbids it everywhere else).
+- `clientEnv` holds `NODE_ENV` and `NEXT_PUBLIC_*`. They are inlined into the bundle at
+  build time, and only on direct access: `process.env.NEXT_PUBLIC_X`, without
+  destructuring and without `process.env[name]`.
+- Server variables and secrets go into a separate `env.server.ts`, created with the first
+  such variable:
 
   ```ts
   import "server-only";
@@ -15,10 +15,10 @@
   export const serverEnv = schema.parse({ API_URL: process.env.API_URL });
   ```
 
-  Импортируется путём `@/shared/config/env.server` и не реэкспортируется из `index.ts`:
-  по импорту видно, что модуль серверный, а `server-only` сломает сборку, если он попадёт
-  в клиентский бандл.
+  It is imported as `@/shared/config/env.server` and not re-exported from `index.ts`: the
+  import shows that the module is server-only, and `server-only` breaks the build if it
+  ends up in the client bundle.
 
-- Каждая новая переменная — в `.env.example` с комментарием и безопасным значением. Если
-  модуль валидирует env при импорте и попадает в тесты — значение и в `test.env` в
-  `vitest.config.mts`.
+- Every new variable goes into `.env.example` with a comment and a safe value. If a module
+  validates env on import and is used in tests, add the value to `test.env` in
+  `vitest.config.mts` as well.

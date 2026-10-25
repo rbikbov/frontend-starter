@@ -1,68 +1,69 @@
-# Состояние и данные
+# State and data
 
-Примеры — на TanStack Query v5 и Zustand. Если в проекте другие
-библиотеки (RTK Query, SWR, Redux, MobX, Pinia), переноси принципы, а не API.
+Examples use TanStack Query v5 and Zustand. If the project uses other
+libraries (RTK Query, SWR, Redux, MobX, Pinia), carry over the principles, not
+the API.
 
-## Содержание
+## Contents
 
-1. Классификация состояния
-2. Серверные данные: клиент, DTO, фабрики запросов
-3. Мутации и инвалидация
-4. Оптимистичные обновления
-5. Состояния загрузки в UI
-6. Клиентские сторы
-7. Конкурентность и согласованность
-8. Формы
-9. Состояние в URL
-10. Чек-лист
-
----
-
-## 1. Классификация состояния
-
-Перед тем как завести состояние, ответь на вопросы по порядку:
-
-1. **Это можно вычислить из другого состояния?** → не храни, вычисляй.
-2. **Источник истины — сервер?** → кэш запросов, не копируй в стор.
-3. **Должно переживать перезагрузку / делиться ссылкой?** → URL.
-4. **Это поля ввода до отправки?** → библиотека форм.
-5. **Нужно одному компоненту?** → `useState` / `useReducer`.
-6. **Нужно поддереву (экрану, виджету)?** → стор-фабрика + context,
-   экземпляр на провайдер.
-7. **Нужно всему приложению и это не сервер/URL?** (тема, язык, состояние
-   сайдбара) → стор в `app` или `entities`, инициализируется в `app`.
-
-Самая частая ошибка — пункт 2: данные сервера копируются в клиентский стор
-и дальше вручную синхронизируются (`set({ tasks: await api.getTasks() })`
-после каждой мутации). Кэш запросов делает это лучше.
+1. Classifying state
+2. Server data: client, DTOs, query factories
+3. Mutations and invalidation
+4. Optimistic updates
+5. Loading states in the UI
+6. Client stores
+7. Concurrency and consistency
+8. Forms
+9. State in the URL
+10. Checklist
 
 ---
 
-## 2. Серверные данные
+## 1. Classifying state
 
-### 2.1. Где что лежит
+Before introducing state, answer these questions in order:
+
+1. **Can it be computed from other state?** → don't store it, compute it.
+2. **Is the source of truth the server?** → query cache, don't copy into a store.
+3. **Must it survive a reload / be shareable by link?** → URL.
+4. **Is it input fields before submission?** → a form library.
+5. **Needed by one component?** → `useState` / `useReducer`.
+6. **Needed by a subtree (screen, widget)?** → store factory + context, an
+   instance per provider.
+7. **Needed by the whole app and not server/URL?** (theme, language, sidebar
+   state) → a store in `app` or `entities`, initialized in `app`.
+
+The most common mistake is item 2: server data is copied into a client store
+and then synced manually (`set({ tasks: await api.getTasks() })` after every
+mutation). A query cache does this better.
+
+---
+
+## 2. Server data
+
+### 2.1. What goes where
 
 ```text
-shared/api/            http-клиент (один экземпляр), сгенерированный клиент
-                       (OpenAPI/orval), общие типы ошибок, интерсепторы-порты
-entities/task/api/     task.dto.ts      — DTO и маппинг DTO ⇄ модель
-                       task.queries.ts  — фабрика ключей и queryOptions
-                       task.mutations.ts — переиспользуемые CRUD-мутации
-entities/task/model/   task.ts          — доменный тип Task и правила
-features/<x>/api/      запросы, нужные только этому сценарию
+shared/api/            http client (one instance), generated client
+                       (OpenAPI/orval), shared error types, interceptor ports
+entities/task/api/     task.dto.ts      — DTO and DTO ⇄ model mapping
+                       task.queries.ts  — key factory and queryOptions
+                       task.mutations.ts — reusable CRUD mutations
+entities/task/model/   task.ts          — the Task domain type and rules
+features/<x>/api/      queries needed only by this scenario
 ```
 
-Если сущность используется одним экраном — всё это живёт в `pages/<page>/api`.
+If the entity is used by a single screen, all of this lives in `pages/<page>/api`.
 
-**Контракт транспорта (интерфейс над API-клиентом).** Интерфейс вида
-`AuthApi` с фабрикой реализаций оправдан, только если у него уже есть
-второй потребитель: разные транспорты (через BFF и напрямую, GraphQL и
-REST), разные бэкенды по окружению или фейк, который нельзя заменить
-перехватом сети (MSW). Иначе — функции запросов поверх одного клиента, а в
-тестах сеть подменяет MSW. Значение конфига без реализации (`type: "mock"`,
-которое бросает «not implemented») не заводится.
+**Transport contract (an interface over the API client).** An interface like
+`AuthApi` with a factory of implementations is justified only if it already
+has a second consumer: different transports (via the BFF and directly,
+GraphQL and REST), different backends per environment, or a fake that can't be
+replaced by network interception (MSW). Otherwise — query functions over a
+single client, and MSW replaces the network in tests. Don't add a config value
+without an implementation (`type: "mock"` that throws "not implemented").
 
-### 2.2. DTO не протекают в UI
+### 2.2. DTOs don't leak into the UI
 
 ```ts
 // entities/task/api/task.dto.ts
@@ -80,11 +81,11 @@ export function mapTask(dto: TaskDto): Task {
 }
 ```
 
-Изменение формата бэкенда затрагивает один маппер, а не весь UI. Для
-данных из недоверенных источников (внешние API, localStorage, URL) —
-runtime-валидация на границе (`zod` и аналоги).
+A backend format change touches one mapper, not the whole UI. For data from
+untrusted sources (external APIs, localStorage, URL) — runtime validation at
+the boundary (`zod` and similar).
 
-### 2.3. Фабрика запросов
+### 2.3. Query factory
 
 ```ts
 // entities/task/api/task.queries.ts
@@ -105,17 +106,17 @@ export const taskQueries = {
     }),
 };
 
-// использование
+// usage
 const { data } = useQuery(taskQueries.detail(taskId));
 ```
 
-- Ключи иерархические: инвалидация `taskQueries.all()` задевает всё о задачах.
-- `signal` пробрасывается в http-клиент — уход со страницы отменяет запрос.
-- Ключи не пишутся строками по месту — только через фабрику.
+- Keys are hierarchical: invalidating `taskQueries.all()` covers everything about tasks.
+- `signal` is forwarded to the http client — leaving the page aborts the request.
+- Keys are never written as inline strings — only through the factory.
 
 ---
 
-## 3. Мутации и инвалидация
+## 3. Mutations and invalidation
 
 ```ts
 // entities/task/api/task.mutations.ts
@@ -129,24 +130,24 @@ export function useCreateTask() {
 }
 ```
 
-- **Где мутация.** Простой CRUD, нужный нескольким сценариям, — в
-  `entities/<x>/api`. Мутация как часть пользовательского сценария
-  (подтверждение, несколько запросов, тост, переход) — в `features/<x>/model`,
-  поверх CRUD сущности.
-- **Мутация возвращает результат** (созданную/обновлённую модель), чтобы
-  вызывающий код не делал лишний запрос и мог продолжить сценарий.
-- **Инвалидация описана рядом с мутацией**, а не размазана по UI.
-- Хук мутации отдаёт `mutateAsync` (для `await` и контрактов `deps`) и, если
-  нужно UI, `isPending` — для блокировки повторной отправки.
+- **Where the mutation lives.** Simple CRUD needed by several scenarios — in
+  `entities/<x>/api`. A mutation that is part of a user scenario
+  (confirmation, several requests, a toast, navigation) — in
+  `features/<x>/model`, on top of the entity's CRUD.
+- **A mutation returns the result** (the created/updated model), so the calling
+  code doesn't make an extra request and can continue the scenario.
+- **Invalidation is described next to the mutation**, not scattered across the UI.
+- The mutation hook exposes `mutateAsync` (for `await` and `deps` contracts)
+  and, if the UI needs it, `isPending` — to block resubmission.
 
 ---
 
-## 4. Оптимистичные обновления
+## 4. Optimistic updates
 
-Правило: **оптимистичное обновление без отката — баг.** Сеть упадёт, и UI
-будет показывать то, чего нет на сервере.
+Rule: **an optimistic update without rollback is a bug.** The network will
+fail, and the UI will show something that isn't on the server.
 
-### 4.1. В кэше запросов
+### 4.1. In the query cache
 
 ```ts
 export function useRenameTask() {
@@ -169,22 +170,23 @@ export function useRenameTask() {
 }
 ```
 
-### 4.2. В клиентском сторе
+### 4.2. In a client store
 
-Паттерн `commit(next, persist)`: запомнить предыдущее, применить новое,
-при ошибке вернуть и **пробросить ошибку** (показ ошибки — забота UI). Код —
-`dependency-injection.md`, раздел 5.2.
+The `commit(next, persist)` pattern: remember the previous state, apply the new
+one, on error restore it and **rethrow** (showing the error is the UI's job).
+Code — `dependency-injection.md`, section 5.2.
 
-**Когда откат опасен.** Если между применением и ошибкой пришли другие
-изменения, «вернуть предыдущее» затрёт их. Для сложных случаев вместо
-отката перезагружай актуальное состояние с сервера (инвалидация / `reload`).
+**When rollback is dangerous.** If other changes arrived between applying and
+the error, "restore the previous state" overwrites them. For complex cases,
+instead of rolling back, reload the actual state from the server
+(invalidation / `reload`).
 
 ---
 
-## 5. Состояния загрузки в UI
+## 5. Loading states in the UI
 
-Каждый асинхронный UI явно обрабатывает **четыре** состояния:
-loading, error, empty, success.
+Every async UI explicitly handles **four** states: loading, error, empty,
+success.
 
 ```tsx
 export function TaskList({ filters }: { filters: TaskFilters }) {
@@ -205,134 +207,131 @@ export function TaskList({ filters }: { filters: TaskFilters }) {
 }
 ```
 
-- Собственные асинхронные состояния описывай discriminated union:
+- Describe your own async states with a discriminated union:
   `{ status: "idle" } | { status: "pending" } | { status: "error"; error: AppError } | { status: "success"; data: T }`,
-  а не набором `isLoading` + `error` + `data`, допускающим невозможные
-  комбинации.
-- Кнопка, запускающая мутацию, блокируется на время `isPending`.
-- Альтернатива — Suspense + error boundary, если проект их использует
-  последовательно. Не смешивай оба подхода на одном экране.
+  not a set of `isLoading` + `error` + `data` that allows impossible
+  combinations.
+- A button that triggers a mutation is disabled while `isPending`.
+- The alternative is Suspense + error boundaries, if the project uses them
+  consistently. Don't mix both approaches on one screen.
 
 ---
 
-## 6. Клиентские сторы
+## 6. Client stores
 
-### 6.1. Нужен ли стор вообще
+### 6.1. Do you need a store at all
 
-Стор оправдан для **сложного интерактивного локального состояния**:
-редактор с drag&drop, многошаговый мастер, канвас, корзина до оформления.
-Для «загрузить и показать» стор не нужен — хватает кэша запросов.
+A store is justified for **complex interactive local state**: an editor with
+drag&drop, a multi-step wizard, a canvas, a cart before checkout. For "load and
+show" you don't need a store — the query cache is enough.
 
-### 6.2. Правила
+### 6.2. Rules
 
-- **Фабрика + провайдер, экземпляр на поддерево.** Никаких
-  `export const useStore = create(...)` на уровне модуля для данных,
-  зависящих от пользователя или экрана: такие синглтоны протекают между
-  тестами, между пользователями при SSR и между экранами.
-- **Зависимости — аргументом фабрики** (`getDeps`), см. DI-reference.
-- **Минимальная форма состояния.** Не храни производное (`filteredCards`,
-  `count`, `usersById` рядом с `users`). Нормализуй, если одна сущность
-  встречается в нескольких местах.
-- **Действия — оркестрация, вычисления — чистые функции.** Тело действия:
-  взять состояние → вызвать доменную функцию → `set` → вызвать deps.
-- **Новый экземпляр при смене сущности** — `key` на провайдере.
+- **Factory + provider, an instance per subtree.** No module-level
+  `export const useStore = create(...)` for user- or screen-dependent data:
+  such singletons leak between tests, between users during SSR and between
+  screens.
+- **Dependencies as a factory argument** (`getDeps`), see the DI reference.
+- **Minimal state shape.** Don't store derived data (`filteredCards`, `count`,
+  `usersById` next to `users`). Normalize if one entity appears in several places.
+- **Actions orchestrate, pure functions compute.** An action body: take the
+  state → call a domain function → `set` → call deps.
+- **A new instance when the entity changes** — `key` on the provider.
 
-### 6.3. Селекторы
+### 6.3. Selectors
 
 ```ts
-// Хорошо: атомарные селекторы, стабильные ссылки
+// Good: atomic selectors, stable references
 const title = useBoardStore((state) => state.board.title);
 const addCard = useBoardStore((state) => state.addCard);
 
-// Плохо: новый объект на каждый вызов → лишние ререндеры
-// (в Zustand v5 — бесконечный цикл)
+// Bad: a new object on every call → extra re-renders
+// (in Zustand v5 — an infinite loop)
 const { title, addCard } = useBoardStore((state) => ({ title: state.board.title, addCard: state.addCard }));
-// Если нужен объект — useShallow:
+// If you need an object — useShallow:
 const { title, addCard } = useBoardStore(useShallow((state) => ({ title: state.board.title, addCard: state.addCard })));
 
-// Плохо: вычисление внутри селектора строит новую структуру каждый раз
+// Bad: computing inside the selector builds a new structure every time
 const usersById = useUsersStore((state) => state.users.reduce(/* ... */, {}));
-// Хорошо: выбрать исходные данные, вычислить мемоизированно
+// Good: select the source data, compute with memoization
 const users = useUsersStore((state) => state.users);
 const usersById = useMemo(() => indexById(users), [users]);
 ```
 
-### 6.4. Копия серверных данных в сторе
+### 6.4. A copy of server data in a store
 
-Если стор держит редактируемую копию серверных данных (доска для drag&drop),
-явно определи:
-- **начальный снимок** — из запроса, при монтировании провайдера;
-- **сохранение** — через deps (`saveBoard`), с инвалидацией кэша;
-- **внешние изменения** (другой пользователь, realtime) — действие
-  `reset(board)` или пересоздание провайдера по `key`/версии.
+If a store holds an editable copy of server data (a board for drag&drop),
+define explicitly:
+- **the initial snapshot** — from the query, when the provider mounts;
+- **saving** — via deps (`saveBoard`), with cache invalidation;
+- **external changes** (another user, realtime) — a `reset(board)` action or
+  recreating the provider by `key`/version.
 
 ---
 
-## 7. Конкурентность и согласованность
+## 7. Concurrency and consistency
 
-- **Гранулярные команды лучше сохранения агрегата целиком.**
-  `moveCard(cardId, to)` на сервере вместо `PUT /boards/:id` со всей доской:
-  целиком — «последняя запись выигрывает» и затирает чужие правки.
-  Если бэкенд умеет только целиком — зафиксируй это как известное
-  ограничение и сообщи пользователю.
-- **Устаревшие ответы игнорируются.** Кэш запросов делает это сам; в
-  самописных эффектах используй `AbortController` и флаг отмены.
-- **Повторная отправка блокируется** (`isPending`), а мутации над одной
-  сущностью при необходимости сериализуются (`scope` в TanStack Query или
-  очередь в сторе).
-- **Один запрос на много ожидающих (single-flight)** — refresh токена,
-  загрузка конфига: все ожидающие получают **результат** общего промиса, а не
-  просто дожидаются его завершения; промис сбрасывается в `finally`;
-  исходный запрос повторяется не больше одного раза.
+- **Granular commands beat saving the whole aggregate.**
+  `moveCard(cardId, to)` on the server instead of `PUT /boards/:id` with the
+  whole board: the whole thing means "last write wins" and overwrites others'
+  edits. If the backend can only save the whole thing, record it as a known
+  limitation and tell the user.
+- **Stale responses are ignored.** A query cache does this itself; in
+  hand-written effects use an `AbortController` and a cancellation flag.
+- **Resubmission is blocked** (`isPending`), and mutations on the same entity
+  are serialized when needed (`scope` in TanStack Query or a queue in the store).
+- **One request for many waiters (single-flight)** — token refresh, config
+  loading: all waiters get the **result** of the shared promise, not just wait
+  for it to finish; the promise is reset in `finally`; the original request is
+  retried at most once.
 
   ```ts
   let refreshing: Promise<boolean> | null = null;
 
   async function refreshOnce(refresh: () => Promise<boolean>) {
     refreshing ??= refresh().finally(() => { refreshing = null; });
-    return refreshing; // ✗ `await refreshing;` без результата: ждущие повторят запрос и после неудачи
+    return refreshing; // ✗ `await refreshing;` without the result: waiters would retry even after a failure
   }
   ```
-- **Идентификаторы для оптимистичных сущностей** генерируются через
-  внедряемую `createId`, а не на сервере постфактум, если UI нужен id сразу.
+- **Ids for optimistic entities** are generated via an injected `createId`,
+  not by the server after the fact, if the UI needs the id right away.
 
 ---
 
-## 8. Формы
+## 8. Forms
 
-- Библиотека форм (`react-hook-form` и т. п.) + схема валидации; схема —
-  рядом с формой в `model/`.
-- Форма монтируется **после** загрузки начальных данных (или
-  пересоздаётся по `key`), иначе `defaultValues` останутся пустыми.
-- Ошибки сервера сопоставляются полям (`setError`) или показываются над
-  формой; форма не закрывается при ошибке.
-- Отправка блокируется на время `isSubmitting`.
-- Компонент формы не решает, что делать после успеха: `onSuccess(result)`
-  наверх (DI, ступень 1).
-
----
-
-## 9. Состояние в URL
-
-Фильтры, сортировка, пагинация, выбранная вкладка, открытая сущность —
-в search params, если ими нужно делиться ссылкой или они должны пережить
-перезагрузку.
-
-- Чтение/запись — в хуке страницы (`pages/<page>/model/use-<page>-filters.ts`),
-  с разбором и валидацией (некорректный параметр → значение по умолчанию).
-- Фичи получают значения пропсами и сообщают изменения колбэками — они не
-  знают, что состояние живёт в URL.
+- A form library (`react-hook-form` etc.) + a validation schema; the schema
+  lives next to the form in `model/`.
+- The form mounts **after** the initial data loads (or is recreated by `key`),
+  otherwise `defaultValues` stay empty.
+- Server errors are mapped to fields (`setError`) or shown above the form; the
+  form doesn't close on error.
+- Submission is blocked while `isSubmitting`.
+- The form component doesn't decide what to do after success: `onSuccess(result)`
+  goes up (DI, rung 1).
 
 ---
 
-## 10. Чек-лист
+## 9. State in the URL
 
-- [ ] Состояние классифицировано; серверные данные не скопированы в стор без
-      причины; производное не хранится.
-- [ ] DTO маппятся на границе API; ключи запросов — из фабрики.
-- [ ] Мутации возвращают результат и инвалидируют связанные запросы.
-- [ ] Оптимистичные обновления откатываются или перезапрашивают данные.
-- [ ] UI обрабатывает loading / error / empty / success; кнопки блокируются
-      во время отправки.
-- [ ] Сторы — фабрики с зависимостями аргументом; провайдер с `key`;
-      селекторы возвращают стабильные ссылки.
+Filters, sorting, pagination, the selected tab, the open entity — in search
+params, if they need to be shareable by link or survive a reload.
+
+- Reading/writing — in the page's hook (`pages/<page>/model/use-<page>-filters.ts`),
+  with parsing and validation (an invalid parameter → the default value).
+- Features receive values via props and report changes via callbacks — they
+  don't know the state lives in the URL.
+
+---
+
+## 10. Checklist
+
+- [ ] State is classified; server data isn't copied into a store without a
+      reason; derived data isn't stored.
+- [ ] DTOs are mapped at the API boundary; query keys come from the factory.
+- [ ] Mutations return the result and invalidate related queries.
+- [ ] Optimistic updates roll back or refetch the data.
+- [ ] The UI handles loading / error / empty / success; buttons are disabled
+      during submission.
+- [ ] Stores are factories with dependencies as an argument; the provider has
+      a `key`; selectors return stable references.

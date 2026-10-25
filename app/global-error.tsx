@@ -4,8 +4,8 @@ import { useEffect } from "react";
 
 import { reportError } from "@/_app";
 
-// Заменяет корневой лейаут целиком: глобальные стили и шрифты сюда не доходят,
-// поэтому разметка минимальная и с системными цветами.
+// Replaces the root layout entirely: global styles and fonts don't reach it,
+// so the markup is minimal and uses system colors.
 export default function GlobalError({ error, retry }: { error: unknown; retry: () => void }) {
   useEffect(() => {
     reportError(error, { boundary: "global" });

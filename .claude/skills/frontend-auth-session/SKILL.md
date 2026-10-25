@@ -1,242 +1,242 @@
 ---
 name: frontend-auth-session
 description: >
-  Авторизация и сессия во фронтенде на Next.js (App Router): где хранить
-  токены, BFF на route handlers с HttpOnly-cookie, refresh токена без гонок,
-  определение «не авторизован» (включая GraphQL, который отвечает 200),
-  проверки в proxy.ts и Data Access Layer, безопасный редирект после входа,
-  выход без утечки данных прошлого пользователя, токены в ссылках сброса
-  пароля, формы входа и восстановления. Использовать, когда проектируешь или
-  пишешь вход, регистрацию, восстановление пароля, защищённые страницы,
-  API-клиент с refresh-токеном, или ревьюишь такой код.
+  Authentication and session in a Next.js (App Router) frontend: where to store
+  tokens, a BFF on route handlers with HttpOnly cookies, race-free token
+  refresh, detecting "unauthenticated" (including GraphQL, which responds with
+  200), checks in proxy.ts and the Data Access Layer, safe redirect after
+  sign-in, sign-out without leaking the previous user's data, tokens in
+  password reset links, sign-in and recovery forms. Use when designing or
+  writing sign-in, sign-up, password recovery, protected pages, an API client
+  with a refresh token, or when reviewing such code.
 ---
 
-# Авторизация и сессия в Next.js
+# Authentication and session in Next.js
 
-Документ про фронтенд, который получает сессию от бэкенда (токены или
-сессионный id) и должен хранить её, продлевать и проверять. Если проект
-использует библиотеку или провайдера (Auth.js, Better Auth, Clerk и т. п.) —
-механику сессии берёт она, но правила разделов 2, 6–10 остаются в силе.
-Код — `references/implementation.md`.
+This document covers a frontend that receives a session from the backend
+(tokens or a session id) and has to store it, extend it and check it. If the
+project uses a library or provider (Auth.js, Better Auth, Clerk, etc.), it
+handles the session mechanics, but the rules in sections 2 and 6–10 still apply.
+Code — `references/implementation.md`.
 
-**Приоритет правил.** Инструкции пользователя и agent-файлы проекта важнее.
-Если бэкенд диктует иное (например, сам ставит cookie) — следуй бэкенду и
-запиши отличие в README или ADR.
+**Rule priority.** The user's instructions and the project's agent files take
+precedence. If the backend dictates otherwise (for example, it sets the cookies
+itself), follow the backend and record the difference in the README or an ADR.
 
-Обозначения: **MUST** — нарушать нельзя; **SHOULD** — по умолчанию да,
-отступление требует причины.
+Notation: **MUST** — never violate; **SHOULD** — yes by default, a deviation
+needs a reason.
 
 ---
 
-## 1. Выбор модели
+## 1. Choosing a model
 
-| Модель | Когда |
+| Model | When |
 |---|---|
-| **BFF:** route handlers Next получают токены от бэкенда и кладут в HttpOnly-cookie | Бэкенд отдаёт токены в теле ответа. Вариант по умолчанию для Next |
-| Бэкенд сам ставит HttpOnly-cookie | Фронтенд и API на одном сайте, бэкенд под твоим контролем |
-| Библиотека или провайдер | Нужны OAuth, MFA, управление пользователями — не пиши это сам |
-| Access в памяти, refresh в HttpOnly-cookie | SPA без BFF |
-| Токены в `localStorage`/`sessionStorage` | **Запрещено:** любой XSS уносит сессию |
+| **BFF:** Next route handlers receive tokens from the backend and put them into HttpOnly cookies | The backend returns tokens in the response body. The default for Next |
+| The backend sets HttpOnly cookies itself | Frontend and API on the same site, backend under your control |
+| A library or provider | You need OAuth, MFA, user management — don't write this yourself |
+| Access token in memory, refresh token in an HttpOnly cookie | SPA without a BFF |
+| Tokens in `localStorage`/`sessionStorage` | **Forbidden:** any XSS steals the session |
 
-Вторая развилка — **что проксирует BFF**:
+The second fork is **what the BFF proxies**:
 
-| Вариант | Плюсы | Минусы |
+| Option | Pros | Cons |
 |---|---|---|
-| Только login / refresh / logout, остальные запросы идут на API напрямую с cookie | BFF не узкое место; меньше кода | API читает токен из cookie и настраивает CORS; cookie должны долетать до домена API |
-| Все запросы через BFF | API не знает про cookie и CORS; один origin | Каждый запрос — лишний хоп; BFF надо масштабировать |
+| Only login / refresh / logout; other requests go to the API directly with cookies | The BFF is not a bottleneck; less code | The API reads the token from a cookie and configures CORS; cookies must reach the API domain |
+| All requests through the BFF | The API knows nothing about cookies and CORS; one origin | Every request is an extra hop; the BFF has to scale |
 
-Выбор записывается в ADR.
+The choice is recorded in an ADR.
 
 ---
 
-## 2. Cookie (MUST)
+## 2. Cookies (MUST)
 
-- `HttpOnly` для всего, что даёт доступ (access, refresh, id сессии).
-- `Secure` в продакшене. Локально браузеры разрешают `Secure` на
-  `http://localhost`, но не на других http-хостах.
-- `SameSite=Lax` по умолчанию. `Strict` надёжнее против CSRF, но
-  пользователь, пришедший по ссылке из письма или с другого сайта, на первом
-  переходе выглядит неавторизованным — выбирай осознанно и запиши причину.
-- `Path=/`; срок жизни — из `exp` токена или из ответа бэкенда, не
-  «на глаз».
-- SHOULD: префикс `__Host-` в имени (требует `Secure`, `Path=/`, без
-  `Domain`) — cookie нельзя подменить с поддомена.
-- Cookie ставятся и удаляются **только на сервере** (route handler, Server
-  Action, `proxy.ts`). Server Components cookie ставить не могут.
-- Нечитаемая из JS cookie — единственный носитель сессии. Флаг вида
-  `is_authenticated` без `HttpOnly` допустим только как подсказка для UI и
-  никогда не используется для решений о доступе.
+- `HttpOnly` for everything that grants access (access, refresh, session id).
+- `Secure` in production. Locally, browsers allow `Secure` on
+  `http://localhost`, but not on other http hosts.
+- `SameSite=Lax` by default. `Strict` is stronger against CSRF, but a user
+  arriving via a link from an email or another site looks unauthenticated on
+  the first navigation — choose deliberately and record the reason.
+- `Path=/`; lifetime comes from the token's `exp` or from the backend response,
+  not a guess.
+- SHOULD: the `__Host-` name prefix (requires `Secure`, `Path=/`, no
+  `Domain`) — the cookie can't be overridden from a subdomain.
+- Cookies are set and deleted **only on the server** (route handler, Server
+  Action, `proxy.ts`). Server Components can't set cookies.
+- A cookie unreadable from JS is the only carrier of the session. A flag like
+  `is_authenticated` without `HttpOnly` is acceptable only as a UI hint and is
+  never used for access decisions.
 
 ---
 
 ## 3. BFF: route handlers (MUST)
 
-- Вход валидируется схемой (`zod`); тело с неверной формой — `400`.
-- Мутирующие обработчики проверяют `Origin` против origin приложения:
-  `SameSite=Lax` не защищает от запросов с поддоменов того же сайта.
-  Server Actions сравнивают `Origin` с `Host` сами.
-- Клиентский контекст пробрасывается бэкенду: `X-Forwarded-For`,
-  `User-Agent` — иначе rate limit бэкенда видит только IP сервера.
-- Ошибки бэкенда переводятся в ответ с `kind` и статусом (`401`, `403`,
-  `422`, `429` с `Retry-After`, `503`), текст бэкенда наружу не уходит.
-- **Refresh:** если бэкенд **отклонил** refresh-токен — удалить cookie и
-  ответить `401`. Если бэкенд **недоступен** (сеть, 5xx) — cookie не трогать,
-  ответить `503`: временный сбой не должен разлогинивать.
-- **Logout:** отозвать токен на бэкенде (ошибку залогировать, но не
-  показывать), cookie удалить в любом случае.
+- Input is validated with a schema (`zod`); a malformed body gets `400`.
+- Mutating handlers check `Origin` against the app's origin: `SameSite=Lax`
+  doesn't protect against requests from subdomains of the same site.
+  Server Actions compare `Origin` with `Host` themselves.
+- Client context is forwarded to the backend: `X-Forwarded-For`,
+  `User-Agent` — otherwise the backend's rate limit only sees the server's IP.
+- Backend errors are translated into a response with `kind` and status (`401`,
+  `403`, `422`, `429` with `Retry-After`, `503`); the backend's text doesn't
+  leak out.
+- **Refresh:** if the backend **rejected** the refresh token, delete the
+  cookies and respond `401`. If the backend is **unavailable** (network, 5xx),
+  leave the cookies alone and respond `503`: a transient failure must not sign
+  the user out.
+- **Logout:** revoke the token on the backend (log the error but don't show
+  it), and delete the cookies regardless.
 
 ---
 
-## 4. Где проверять сессию (MUST)
+## 4. Where to check the session (MUST)
 
-| Место | Что делает | Чего не делает |
+| Place | What it does | What it doesn't do |
 |---|---|---|
-| `proxy.ts` (Next 16+, раньше `middleware.ts`) | Оптимистичная проверка по наличию cookie: редирект на вход и со страниц входа | Не ходит в БД и API; не единственная защита |
-| Data Access Layer (`verifySession()` в `server-only` модуле) | Проверка рядом с данными: в серверных компонентах, route handlers, Server Actions | — |
-| Лейаут | Ничего: лейауты не перерисовываются при навигации | Не проверяет доступ |
-| Бэкенд | Источник истины: проверяет токен на каждом запросе | — |
+| `proxy.ts` (Next 16+, formerly `middleware.ts`) | Optimistic check by cookie presence: redirect to sign-in and away from sign-in pages | Doesn't hit the DB or API; is not the only protection |
+| Data Access Layer (`verifySession()` in a `server-only` module) | Check next to the data: in server components, route handlers, Server Actions | — |
+| Layout | Nothing: layouts don't re-render on navigation | Doesn't check access |
+| Backend | Source of truth: verifies the token on every request | — |
 
-- Каждый route handler и Server Action — публичная точка входа и сам
-  вызывает `verifySession()`.
-- `proxy.ts` проверяет **refresh**-cookie (или id сессии): access мог
-  истечь, а сессия жива.
-- Совпадение пути — по сегментам: `/app` и `/app/…`, но не `/apple`.
-- С `cacheComponents` (по умолчанию в проектах на Next 16.4) у чтения
-  сессии и кэширования данных пользователя свои правила: до того как писать
-  DAL, прочитай `node_modules/next/dist/docs/01-app/02-guides/authentication-with-cache-components.md`.
-- Права (роль, владение) решаются по проверенным данным: по подписи (JWKS,
-  `jose`) или по ответу бэкенда. Непроверенный payload JWT — не основание
-  для доступа.
-- Server Components не могут обновить cookie. Если access истёк к моменту
-  серверного рендера: либо `proxy.ts` обновляет сессию (он может ставить
-  cookie в ответ — делай это только для навигаций документа, не для
-  prefetch, и учти ротацию refresh-токенов), либо страница рендерит
-  клиентскую загрузку и refresh делает клиент.
-
----
-
-## 5. Клиент: refresh без гонок (MUST)
-
-- **Определение «не авторизован»:** HTTP `401`, либо в GraphQL-ответе (он
-  `200`) хотя бы одна ошибка с `extensions.code === "UNAUTHENTICATED"`
-  (`errors.some`, не `errors[0]`). Сравнение с текстом сообщения — только
-  если бэкенд не отдаёт кодов, в одной функции, с комментарием и тестом.
-- **Single-flight:** параллельные запросы, получившие 401, ждут один общий
-  refresh и **используют его результат**. Промис сбрасывается в `finally`.
-- Исходный запрос повторяется **один раз**. Повторный 401 — сессия
-  потеряна, без второго refresh.
-- Сам запрос refresh не проходит через перехватчик (иначе рекурсия).
-- Результат refresh различает три исхода: выдан (`true`) → повторить;
-  отклонён (`false`) → сессия истекла; сеть или 5xx (исключение) → ошибка
-  `network`, **без** выхода из аккаунта.
-- Во время выхода refresh заблокирован: иначе запрос, упавший с 401 в момент
-  logout, тут же восстановит сессию.
-- Истекшая сессия: очистить кэш запросов, увести на вход с `callbackUrl`
-  текущей страницы.
-- Тело повторяемого запроса должно быть повторяемым (строка, `FormData`), не
-  одноразовый `ReadableStream`.
+- Every route handler and Server Action is a public entry point and calls
+  `verifySession()` itself.
+- `proxy.ts` checks the **refresh** cookie (or session id): the access token
+  may have expired while the session is alive.
+- Path matching is by segment: `/app` and `/app/…`, but not `/apple`.
+- With `cacheComponents` (the default in Next 16.4 projects), reading the
+  session and caching user data have their own rules: before writing the DAL,
+  read `node_modules/next/dist/docs/01-app/02-guides/authentication-with-cache-components.md`.
+- Permissions (role, ownership) are decided from verified data: by signature
+  (JWKS, `jose`) or by the backend's response. An unverified JWT payload is no
+  basis for access.
+- Server Components can't update cookies. If the access token expired by the
+  time of server rendering: either `proxy.ts` refreshes the session (it can set
+  cookies on the response — do this only for document navigations, not
+  prefetches, and account for refresh token rotation), or the page renders a
+  client-side loading state and the client does the refresh.
 
 ---
 
-## 6. Редирект после входа (MUST)
+## 5. Client: race-free refresh (MUST)
 
-- `callbackUrl` (`next`, `returnTo`) проверяется функцией
-  `getSafeRedirect(raw, fallback, appOrigin)`: отклоняет `\` и управляющие
-  символы (браузеры превращают `/\evil.com` и `/<tab>/evil.com` в
-  `//evil.com`), разбирает `new URL(raw, appOrigin)`, сравнивает origin и
-  возвращает только путь. Проверка «начинается с `/` и не с `//`» —
-  **недостаточна**.
-- Набор тестов на неё — `references/implementation.md`, раздел 7.
-- После входа серверные компоненты должны увидеть новые cookie: полная
-  навигация (`window.location.assign`) или `router.replace` +
-  `router.refresh()`.
-
----
-
-## 7. Выход (MUST)
-
-- Сервер удаляет cookie (раздел 3).
-- Клиент очищает кэш запросов (`queryClient.clear()`) и все клиентские
-  сторы с данными пользователя: следующий пользователь в той же вкладке не
-  должен увидеть чужие данные даже на мгновение.
-- Навигация на страницу входа без возможности вернуться «назад» в
-  закэшированный защищённый экран (`replace` или полная навигация).
-- Подтверждение выхода — по желанию продукта; блокировка кнопки на время
-  запроса — обязательно.
-- SHOULD: другие вкладки узнают о выходе (`BroadcastChannel` или событие
-  `storage` по флагу), иначе они продолжают показывать данные до первого 401.
+- **Detecting "unauthenticated":** HTTP `401`, or in a GraphQL response (which
+  is `200`) at least one error with `extensions.code === "UNAUTHENTICATED"`
+  (`errors.some`, not `errors[0]`). Comparing message text only if the backend
+  provides no codes, in one function, with a comment and a test.
+- **Single-flight:** parallel requests that got 401 wait for one shared
+  refresh and **use its result**. The promise is reset in `finally`.
+- The original request is retried **once**. A second 401 means the session is
+  lost, no second refresh.
+- The refresh request itself doesn't go through the interceptor (otherwise
+  recursion).
+- The refresh result distinguishes three outcomes: issued (`true`) → retry;
+  rejected (`false`) → session expired; network or 5xx (exception) → a
+  `network` error, **without** signing out.
+- Refresh is blocked during sign-out: otherwise a request that failed with 401
+  at the moment of logout would immediately restore the session.
+- Expired session: clear the query cache, send the user to sign-in with a
+  `callbackUrl` of the current page.
+- The body of a retried request must be replayable (a string, `FormData`), not
+  a one-shot `ReadableStream`.
 
 ---
 
-## 8. Токены в ссылках (сброс пароля, подтверждение email)
+## 6. Redirect after sign-in (MUST)
 
-- Токен читается из URL **один раз** в состояние, затем адрес заменяется без
-  токена (`router.replace(pathname)`): он не остаётся в истории и не
-  уезжает в `Referer`.
-- Для этих страниц — `Referrer-Policy: no-referrer` и никаких сторонних
-  скриптов (аналитика, виджеты).
-- Токен не логируется. Одноразовость и срок жизни обеспечивает бэкенд;
-  фронтенд показывает понятный экран «ссылка устарела» с действием
-  «запросить новую».
-
----
-
-## 9. Формы входа и восстановления
-
-- Восстановление пароля отвечает одинаково для существующего и
-  несуществующего email («если аккаунт есть, письмо отправлено»), не
-  раскрывая, кто зарегистрирован. Если бэкенд раскрывает — записать как
-  ограничение.
-- Отправка блокируется на время запроса; повторная отправка не создаёт
-  второй запрос.
-- `429`: сообщение с временем ожидания из `Retry-After`, если оно есть.
-- Поля: `type="email"` + `autoComplete="email"`; пароль —
-  `autoComplete="current-password"` при входе и `"new-password"` при
-  регистрации и смене; вставка не блокируется.
-- Кнопка «показать пароль» — `type="button"`, `aria-label` и
-  `aria-pressed`, не забирает фокус у поля.
-- Ошибка «неверный email или пароль» не уточняет, что именно неверно.
-- Ошибки сервера сопоставляются полям по коду; общая — над формой.
+- `callbackUrl` (`next`, `returnTo`) is validated by
+  `getSafeRedirect(raw, fallback, appOrigin)`: it rejects `\` and control
+  characters (browsers turn `/\evil.com` and `/<tab>/evil.com` into
+  `//evil.com`), parses `new URL(raw, appOrigin)`, compares the origin and
+  returns only the path. Checking "starts with `/` and not with `//`" is
+  **not enough**.
+- Its test suite — `references/implementation.md`, section 7.
+- After sign-in, server components must see the new cookies: a full navigation
+  (`window.location.assign`) or `router.replace` + `router.refresh()`.
 
 ---
 
-## 10. Данные и логи
+## 7. Sign-out (MUST)
 
-- Ответы, зависящие от пользователя, не попадают в общие кэши
-  (`"use cache"`, CDN). QueryClient на сервере — новый на каждый запрос.
-- В логах нет токенов, паролей, email. Максимум — id пользователя и `kind`
-  ошибки.
-- Payload сессионного токена минимален: id и роль, без персональных данных.
+- The server deletes the cookies (section 3).
+- The client clears the query cache (`queryClient.clear()`) and all client
+  stores with user data: the next user in the same tab must not see someone
+  else's data, even for an instant.
+- Navigate to the sign-in page with no way to go "back" to a cached protected
+  screen (`replace` or a full navigation).
+- Confirming sign-out is up to the product; disabling the button while the
+  request is in flight is required.
+- SHOULD: other tabs learn about the sign-out (`BroadcastChannel` or a
+  `storage` event on a flag), otherwise they keep showing data until the first 401.
 
 ---
 
-## 11. Тесты
+## 8. Tokens in links (password reset, email confirmation)
 
-- **Unit:** `getSafeRedirect` (весь набор из references); определение
-  «не авторизован» (401, GraphQL-коды, пустое тело, HTML вместо JSON).
-- **Single-flight:** N параллельных запросов с 401 → один refresh, N
-  повторов; refresh отклонён → ни одного повтора, один вызов
-  `onSessionExpired`; refresh упал по сети → ошибка `network`, без выхода;
-  повторный 401 после успешного refresh → без второго refresh; во время
-  logout → без refresh.
-- **Route handlers:** флаги cookie; refresh отклонён → cookie удалены; бэкенд
-  недоступен → cookie на месте, `503`; неверное тело → `400`; чужой `Origin`
-  → `403`.
-- **e2e:** вход → защищённая страница → выход → защищённая страница
-  недоступна; истечение access (короткий TTL в тестовом окружении) →
-  прозрачный refresh; ссылка сброса пароля → токен исчез из адресной строки.
+- The token is read from the URL **once** into state, then the address is
+  replaced without the token (`router.replace(pathname)`): it doesn't stay in
+  history and doesn't leak via `Referer`.
+- For these pages — `Referrer-Policy: no-referrer` and no third-party scripts
+  (analytics, widgets).
+- The token is not logged. One-time use and lifetime are enforced by the
+  backend; the frontend shows a clear "link expired" screen with a "request a
+  new one" action.
+
+---
+
+## 9. Sign-in and recovery forms
+
+- Password recovery responds the same way for existing and nonexistent emails
+  ("if an account exists, an email has been sent"), without revealing who is
+  registered. If the backend reveals it, record that as a limitation.
+- Submission is blocked while the request is in flight; resubmitting doesn't
+  create a second request.
+- `429`: a message with the wait time from `Retry-After`, if present.
+- Fields: `type="email"` + `autoComplete="email"`; password —
+  `autoComplete="current-password"` for sign-in and `"new-password"` for
+  sign-up and change; pasting is not blocked.
+- The "show password" button — `type="button"`, `aria-label` and
+  `aria-pressed`, doesn't steal focus from the field.
+- The "invalid email or password" error doesn't specify which one is wrong.
+- Server errors are mapped to fields by code; a general one goes above the form.
+
+---
+
+## 10. Data and logs
+
+- User-dependent responses don't go into shared caches (`"use cache"`, CDN).
+  The server-side QueryClient is created fresh for every request.
+- No tokens, passwords or emails in logs. At most — the user id and the error
+  `kind`.
+- The session token payload is minimal: id and role, no personal data.
+
+---
+
+## 11. Tests
+
+- **Unit:** `getSafeRedirect` (the full suite from references); detecting
+  "unauthenticated" (401, GraphQL codes, empty body, HTML instead of JSON).
+- **Single-flight:** N parallel requests with 401 → one refresh, N retries;
+  refresh rejected → no retries, one `onSessionExpired` call; refresh failed
+  on the network → a `network` error, no sign-out; a second 401 after a
+  successful refresh → no second refresh; during logout → no refresh.
+- **Route handlers:** cookie flags; refresh rejected → cookies deleted;
+  backend unavailable → cookies kept, `503`; invalid body → `400`; foreign
+  `Origin` → `403`.
+- **e2e:** sign in → protected page → sign out → protected page is
+  unavailable; access expiry (short TTL in the test environment) → transparent
+  refresh; password reset link → the token is gone from the address bar.
 
 ---
 
 ## 12. Definition of Done
 
-- [ ] Ни один токен не читается из JS; `localStorage` не используется для сессии.
-- [ ] Cookie: `HttpOnly`, `Secure` в проде, `SameSite`, `Path`, срок из токена.
-- [ ] Refresh: отклонение и недоступность бэкенда различаются.
-- [ ] Single-flight с результатом, один повтор, блокировка во время logout — покрыто тестами.
-- [ ] `proxy.ts` — только оптимистичная проверка; DAL вызывается в handlers, actions и серверных компонентах.
-- [ ] `getSafeRedirect` с полным набором тестов.
-- [ ] Выход очищает кэш и сторы клиента.
-- [ ] Токены из ссылок убираются из адресной строки.
-- [ ] В логах нет токенов и персональных данных.
-- [ ] Выбор модели и прокси записан в ADR.
+- [ ] No token is readable from JS; `localStorage` is not used for the session.
+- [ ] Cookies: `HttpOnly`, `Secure` in prod, `SameSite`, `Path`, lifetime from the token.
+- [ ] Refresh: rejection and backend unavailability are distinguished.
+- [ ] Single-flight with a result, one retry, blocking during logout — covered by tests.
+- [ ] `proxy.ts` is only an optimistic check; the DAL is called in handlers, actions and server components.
+- [ ] `getSafeRedirect` with the full test suite.
+- [ ] Sign-out clears the client's cache and stores.
+- [ ] Tokens from links are removed from the address bar.
+- [ ] No tokens or personal data in logs.
+- [ ] The choice of model and proxying is recorded in an ADR.

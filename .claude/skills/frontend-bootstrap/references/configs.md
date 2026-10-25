@@ -1,29 +1,29 @@
-# Конфиги для старта
+# Starter configs
 
-Шаблоны под Next.js 16.4, ESLint 9 (flat config), Tailwind v4, Vitest 5,
-MSW 3, Playwright, pnpm. Все они проверены вживую в шаблоне
-`frontend-starter`: если он есть, копируй конфиги оттуда, а не отсюда. Перед
-копированием сверь с документацией установленных версий; после — запусти
-скрипт, который конфиг обслуживает.
+Templates for Next.js 16.4, ESLint 9 (flat config), Tailwind v4, Vitest 5,
+MSW 3, Playwright, pnpm. All of them are verified live in the
+`frontend-starter` template: if it exists, copy the configs from there, not
+from here. Before copying, check against the docs of the installed versions;
+afterwards, run the script the config serves.
 
-`create-next-app` 16.4 по умолчанию включает в `next.config.ts`
-`cacheComponents: true`, `partialPrefetching: true` и подключает Tailwind
-через loader Turbopack (`@tailwindcss/turbopack`), без PostCSS. Эти
-настройки оставляй: от них зависит, как пререндерятся страницы и обработчики.
+`create-next-app` 16.4 enables `cacheComponents: true` and
+`partialPrefetching: true` in `next.config.ts` by default and wires Tailwind
+through the Turbopack loader (`@tailwindcss/turbopack`), without PostCSS. Keep
+these settings: they determine how pages and handlers are prerendered.
 
-## Содержание
+## Contents
 
 1. [package.json](#1-packagejson)
 2. [TypeScript](#2-typescript)
 3. [ESLint](#3-eslint)
 4. [Prettier](#4-prettier)
-5. [Git-хуки и commitlint](#5-git-хуки-и-commitlint)
+5. [Git hooks and commitlint](#5-git-hooks-and-commitlint)
 6. [Vitest](#6-vitest)
 7. [Playwright](#7-playwright)
 8. [next.config.ts](#8-nextconfigts)
 9. [.gitignore](#9-gitignore)
 10. [CI (GitHub Actions)](#10-ci-github-actions)
-11. [Каркас README](#11-каркас-readme)
+11. [README skeleton](#11-readme-skeleton)
 
 ---
 
@@ -31,14 +31,14 @@ MSW 3, Playwright, pnpm. Все они проверены вживую в шаб
 
 ```jsonc
 {
-  "packageManager": "pnpm@<версия из `pnpm -v`>",
+  "packageManager": "pnpm@<version from `pnpm -v`>",
   "engines": { "node": ">=20.9" },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    // next typegen генерирует типы маршрутов (PageProps и т. п.), без него tsc их не видит
+    // next typegen generates route types (PageProps etc.); without it tsc doesn't see them
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -54,27 +54,27 @@ MSW 3, Playwright, pnpm. Все они проверены вживую в шаб
 }
 ```
 
-Рядом — `.nvmrc` с мажорной версией Node, на которой собирается CI.
+Next to it — `.nvmrc` with the major Node version CI builds on.
 
 ---
 
 ## 2. TypeScript
 
-К тому, что сгенерировал `create-next-app`, добавь:
+Add to what `create-next-app` generated:
 
 ```jsonc
-// tsconfig.json (фрагмент compilerOptions)
+// tsconfig.json (compilerOptions fragment)
 {
   "strict": true,
-  "noUncheckedIndexedAccess": true,   // arr[i] и record[key] — T | undefined
+  "noUncheckedIndexedAccess": true,   // arr[i] and record[key] are T | undefined
   "noImplicitOverride": true,
   "noFallthroughCasesInSwitch": true,
-  "paths": { "@/*": ["./src/*"] }     // FSD живёт в src/, маршруты в корневом app/
+  "paths": { "@/*": ["./src/*"] }     // FSD lives in src/, routes in the root app/
 }
 ```
 
-`exactOptionalPropertyTypes` полезен, но конфликтует с частью библиотек —
-включай осознанно.
+`exactOptionalPropertyTypes` is useful but conflicts with some libraries —
+enable it deliberately.
 
 ---
 
@@ -91,7 +91,7 @@ export default defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    // type-aware правила: ловят забытый await, async в обработчиках, неполный switch
+    // type-aware rules: catch missing await, async handlers, non-exhaustive switch
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
@@ -105,33 +105,34 @@ export default defineConfig([
     },
   },
   {
-    // env читается только в shared/config
+    // env is read only in shared/config
     files: ["src/**/*.{ts,tsx}", "app/**/*.{ts,tsx}"],
     ignores: ["src/shared/config/**"],
     rules: {
       "no-restricted-properties": [
         "error",
-        { object: "process", property: "env", message: "Читай переменные через @/shared/config" },
+        { object: "process", property: "env", message: "Read variables via @/shared/config" },
       ],
     },
   },
-  boundariesConfig, // из блока ниже; объяви его выше export default
-  prettier, // последним из правил: выключает стилистические правила, конфликтующие с Prettier
+  boundariesConfig, // from the block below; declare it above export default
+  prettier, // last among the rules: turns off stylistic rules that conflict with Prettier
   globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "playwright-report/**", "test-results/**"]),
 ]);
 ```
 
-Границы FSD для `eslint-plugin-boundaries` 7 (в v7 правила `element-types` и
-`entry-point` заменены на `boundaries/dependencies` с policies; конфиг из
-`fsd-frontend` написан для v5–v6). Проверено на заведомых нарушениях: импорт
-вверх, cross-import, глубокий импорт в чужой слайс, `process.env` вне конфига.
+FSD boundaries for `eslint-plugin-boundaries` 7 (in v7 the `element-types` and
+`entry-point` rules were replaced by `boundaries/dependencies` with policies; the
+config in `fsd-frontend` is written for v5–v6). Verified against deliberate
+violations: upward import, cross-import, deep import into another slice,
+`process.env` outside the config.
 
 ```js
 import boundaries from "eslint-plugin-boundaries";
 
 const SLICED_LAYERS = ["pages", "widgets", "features", "entities"];
 const layersBelow = {
-  routes: ["app", "pages", "shared"], // корневой app/ Next: только страницы, провайдеры, shared
+  routes: ["app", "pages", "shared"], // Next's root app/: only pages, providers, shared
   app: [...SLICED_LAYERS, "shared"],
   pages: ["widgets", "features", "entities", "shared"],
   widgets: ["features", "entities", "shared"],
@@ -159,16 +160,16 @@ const boundariesConfig = {
   rules: {
     "boundaries/dependencies": ["error", {
       default: "disallow",
-      message: "{{from.element.type}} не может импортировать {{to.element.type}}: только слои ниже, в чужой слайс — через index.ts",
+      message: "{{from.element.type}} cannot import {{to.element.type}}: only lower layers, another slice only via index.ts",
       policies: [
         { allow: { to: { module: { origin: { anyOf: ["external", "core"] } } } } },
-        { allow: { dependency: { relationship: { to: "internal" } } } }, // внутри своего слайса — всё
+        { allow: { dependency: { relationship: { to: "internal" } } } }, // anything within its own slice
         ...Object.entries(layersBelow).map(([from, to]) => ({
           from: { element: { type: from } },
           allow: {
             to: [
               { element: { types: { anyOf: to.filter((t) => !SLICED_LAYERS.includes(t)) } } },
-              // в чужой слайс — только public API
+              // another slice — public API only
               { element: { types: { anyOf: to.filter((t) => SLICED_LAYERS.includes(t)) }, fileInternalPath: "index.{ts,tsx}" } },
             ],
           },
@@ -179,7 +180,7 @@ const boundariesConfig = {
 };
 ```
 
-Next 16 не запускает линтер при `next build` — `pnpm lint` обязателен в CI.
+Next 16 doesn't run the linter during `next build` — `pnpm lint` is required in CI.
 
 ---
 
@@ -194,13 +195,13 @@ Next 16 не запускает линтер при `next build` — `pnpm lint`
 }
 ```
 
-`prettier-plugin-tailwindcss` сортирует классы; для Tailwind v4 ему нужен
-путь к CSS-входу (`tailwindStylesheet`). В `.prettierignore` — то же, что в
-`globalIgnores`, плюс `pnpm-lock.yaml` и сгенерированный код.
+`prettier-plugin-tailwindcss` sorts classes; for Tailwind v4 it needs the path
+to the CSS entry (`tailwindStylesheet`). `.prettierignore` holds the same as
+`globalIgnores`, plus `pnpm-lock.yaml` and generated code.
 
 ---
 
-## 5. Git-хуки и commitlint
+## 5. Git hooks and commitlint
 
 ```bash
 pnpm add -D husky lint-staged @commitlint/cli @commitlint/config-conventional
@@ -222,8 +223,8 @@ pnpm exec commitlint --edit "$1"
 export default { extends: ["@commitlint/config-conventional"] };
 ```
 
-Хуки — быстрые проверки staged-файлов. Typecheck и тесты целиком — в CI,
-иначе коммит становится медленным, и хуки начинают обходить `--no-verify`.
+Hooks are fast checks of staged files. Full typecheck and tests run in CI;
+otherwise committing gets slow and people start bypassing hooks with `--no-verify`.
 
 ---
 
@@ -242,13 +243,13 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  resolve: { tsconfigPaths: true }, // Vite понимает paths из tsconfig сам, плагин не нужен
+  resolve: { tsconfigPaths: true }, // Vite understands tsconfig paths itself, no plugin needed
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     restoreMocks: true,
-    // значения для модулей, которые валидируют env при импорте
+    // values for modules that validate env on import
     env: { NEXT_PUBLIC_APP_URL: "http://localhost:3000" },
   },
 });
@@ -259,13 +260,13 @@ export default defineConfig({
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
-import { server } from "@/shared/lib/test/msw-server"; // export const server = setupServer() из "msw/node"
+import { server } from "@/shared/lib/test/msw-server"; // export const server = setupServer() from "msw/node"
 
-// server-only бросает при импорте вне react-server окружения, а модули с ним тестируются
+// server-only throws when imported outside the react-server environment, but modules using it are tested
 vi.mock("server-only", () => ({}));
 
-// MSW 3: onUnhandledFrame (в MSW 2 — onUnhandledRequest). Старое имя тихо игнорируется,
-// и незамоканные запросы перестают валить тесты — ловит только tsc.
+// MSW 3: onUnhandledFrame (in MSW 2 — onUnhandledRequest). The old name is silently ignored,
+// and unmocked requests stop failing tests — only tsc catches it.
 beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 afterEach(() => {
   server.resetHandlers();
@@ -274,14 +275,14 @@ afterEach(() => {
 afterAll(() => server.close());
 ```
 
-Тестовые провайдеры и фейки — `fsd-frontend`, `references/testing.md`.
+Test providers and fakes — `fsd-frontend`, `references/testing.md`.
 
 ---
 
 ## 7. Playwright
 
 ```bash
-pnpm create playwright   # тесты в e2e/, браузеры ставятся отдельно
+pnpm create playwright   # tests in e2e/, browsers are installed separately
 ```
 
 ```ts
@@ -289,7 +290,7 @@ pnpm create playwright   # тесты в e2e/, браузеры ставятся
 import { defineConfig, devices } from "@playwright/test";
 
 const isCI = Boolean(process.env.CI);
-const PORT = 3100; // не 3000: не мешает уже запущенному dev-серверу
+const PORT = 3100; // not 3000: doesn't clash with an already running dev server
 
 export default defineConfig({
   testDir: "./e2e",
@@ -300,7 +301,7 @@ export default defineConfig({
   use: { baseURL: `http://localhost:${PORT}`, trace: "on-first-retry" },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    // против продакшен-сборки: dev-режим ведёт себя иначе (оверлей ошибок, ленивая компиляция)
+    // against a production build: dev mode behaves differently (error overlay, lazy compilation)
     command: `pnpm build && pnpm start --port ${PORT}`,
     url: `http://localhost:${PORT}/api/health`,
     reuseExistingServer: !isCI,
@@ -309,8 +310,8 @@ export default defineConfig({
 });
 ```
 
-Другие браузеры добавляются, когда есть причина (поддержка Safari —
-требование продукта), а не по умолчанию: каждый умножает время прогона.
+Other browsers are added when there is a reason (Safari support is a product
+requirement), not by default: each one multiplies the run time.
 
 ---
 
@@ -340,12 +341,12 @@ export default nextConfig;
 
 ## 9. .gitignore
 
-К сгенерированному добавь:
+Add to the generated file:
 
 ```gitignore
 .env*
 !.env.example
-next-env.d.ts      # генерируется next typegen / dev / build
+next-env.d.ts      # generated by next typegen / dev / build
 /coverage
 /playwright-report
 /test-results
@@ -376,13 +377,13 @@ jobs:
       NEXT_TELEMETRY_DISABLED: 1
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # версия pnpm берётся из packageManager
+      - uses: pnpm/action-setup@v4 # pnpm version comes from packageManager
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # next typegen и build загружают next.config и env — на значениях из примера
+      # next typegen and build load next.config and env, using the example values
       - run: cp .env.example .env
       - run: pnpm lint
       - run: pnpm format:check
@@ -412,51 +413,52 @@ jobs:
           retention-days: 7
 ```
 
-Job `e2e` годится, пока тесты не ходят во внешний бэкенд. Когда начнут —
-нужен изолированный бэкенд (мок-сервер, стенд с тестовой БД), а не общий.
+The `e2e` job works as long as tests don't hit an external backend. Once they
+do, you need an isolated backend (a mock server, an environment with a test DB),
+not a shared one.
 
 ---
 
-## 11. Каркас README
+## 11. README skeleton
 
 ```markdown
-# <Название>
+# <Name>
 
-<Одна фраза: что это и для кого.>
+<One sentence: what it is and who it's for.>
 
-## Запуск
+## Getting started
 
-Требования: Node <версия>, pnpm <версия>.
+Requirements: Node <version>, pnpm <version>.
 
     cp .env.example .env
     pnpm install
     pnpm dev
 
-| Переменная | Назначение |
+| Variable | Purpose |
 |---|---|
 | ... | ... |
 
-## Скрипты
+## Scripts
 
-`dev`, `build`, `lint`, `typecheck`, `test`, `e2e` — что делает каждый, если неочевидно.
+`dev`, `build`, `lint`, `typecheck`, `test`, `e2e` — what each does, if not obvious.
 
-## Архитектура
+## Architecture
 
-Раскладка (корневой `app/` — маршруты, `src/` — слои FSD), куда класть новый код,
-ссылки на ADR.
+Layout (root `app/` — routes, `src/` — FSD layers), where to put new code,
+links to ADRs.
 
-## Решения и компромиссы
+## Decisions and trade-offs
 
-Решения из раздела 1 SKILL.md с причинами. Известные ограничения.
+Decisions from section 1 of SKILL.md with reasons. Known limitations.
 
-## Тесты
+## Tests
 
-Что покрыто на каждом уровне, как запустить, что сознательно не покрыто и почему.
+What is covered at each level, how to run it, what is deliberately not covered and why.
 
-## Дальше
+## Next
 
-Что не сделано. Только здесь — будущее время.
+What isn't done. Future tense only here.
 ```
 
-Без эмодзи в заголовках и без оценочных слов («современный», «мощный»,
-«production-ready»): README описывает, а не продаёт.
+No emoji in headings and no evaluative words ("modern", "powerful",
+"production-ready"): the README describes, it doesn't sell.

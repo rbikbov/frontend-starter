@@ -1,24 +1,24 @@
 export type AppErrorKind =
-  | "network" // нет соединения, таймаут, CORS
+  | "network" // no connection, timeout, CORS
   | "unauthorized" // 401
   | "forbidden" // 403
   | "not-found" // 404
   | "validation" // 400, 422
   | "conflict" // 409
   | "rate-limited" // 429
-  | "aborted" // запрос отменён — пользователю не показывается
+  | "aborted" // request aborted — not shown to the user
   | "unknown";
 
 export type AppErrorDetails = {
   status?: number;
-  /** Коды ошибок по полям формы. Тексты переводит UI. */
+  /** Error codes per form field. The UI translates them into text. */
   fieldErrors?: Record<string, string>;
-  /** Секунды из заголовка Retry-After. */
+  /** Seconds from the Retry-After header. */
   retryAfter?: number;
   cause?: unknown;
 };
 
-/** Единственный вид ошибки выше shared/api: остальной код не разбирает Response и статусы. */
+/** The only kind of error above shared/api: the rest of the code doesn't parse Response or statuses. */
 export class AppError extends Error {
   readonly kind: AppErrorKind;
   readonly details: AppErrorDetails;

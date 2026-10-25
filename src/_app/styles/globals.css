@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 /*
- * Токены дизайна: значения — CSS-переменные, Tailwind получает их через @theme.
- * Компоненты используют только токены (bg-background, text-muted-foreground, border-border).
- * Имена совпадают с shadcn/ui: скопированные оттуда компоненты работают без правок.
+ * Design tokens: values are CSS variables, Tailwind gets them through @theme.
+ * Components use only tokens (bg-background, text-muted-foreground, border-border).
+ * Names match shadcn/ui: components copied from there work without changes.
  */
 :root {
   --background: #ffffff;

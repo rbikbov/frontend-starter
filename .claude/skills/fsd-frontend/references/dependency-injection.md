@@ -1,59 +1,59 @@
-# Инверсия зависимостей (IoC / DI) во фронтенде на FSD
+# Dependency inversion (IoC / DI) in an FSD frontend
 
-Самый важный навык в этой архитектуре. Правило «импорт только вниз, без
-cross-import» без него невыполнимо, а тестируемость без него стоит дорого
-(моки модулей, тяжёлые провайдеры, сеть в unit-тестах).
+The most important skill in this architecture. Without it, the "import only
+downwards, no cross-imports" rule is impossible to follow, and testability is
+expensive (module mocks, heavy providers, network in unit tests).
 
-**Суть в одной фразе:** модуль объявляет, *что* ему нужно (контракт), а
-*кто* это даст, решает тот, кто модуль использует (слой выше).
+**The gist in one sentence:** a module declares *what* it needs (a contract),
+and whoever uses the module (the layer above) decides *who* provides it.
 
-## Содержание
+## Contents
 
-1. Сквозной пример
-2. Ступень 1 — пропсы, аргументы, колбэки
-3. Ступень 2 — композиция: children и render props
-4. Ступень 3 — контракт `deps` + strict context
-5. Ступень 4 — фабрика стора/сервиса с зависимостями
-6. Сборка на странице: адаптер
-7. Глобальные сервисы: confirm, toast, navigate, i18n, время, id
-8. Promise-диалоги
-9. «Изменилось там — обнови здесь»: связь между слайсами во времени
-10. Ловушки
-11. Чек-лист
+1. A running example
+2. Rung 1 — props, arguments, callbacks
+3. Rung 2 — composition: children and render props
+4. Rung 3 — a `deps` contract + strict context
+5. Rung 4 — a store/service factory with dependencies
+6. Wiring on the page: the adapter
+7. Global services: confirm, toast, navigate, i18n, time, id
+8. Promise dialogs
+9. "Changed there — update here": connecting slices over time
+10. Pitfalls
+11. Checklist
 
 ---
 
-## 1. Сквозной пример
+## 1. A running example
 
-Домен — трекер задач. Нужен экран доски (kanban): колонки, карточки,
-перетаскивание, создание карточки, редактирование в диалоге.
+The domain is a task tracker. We need a board (kanban) screen: columns, cards,
+drag and drop, creating a card, editing in a dialog.
 
 ```text
 shared/lib/react     createStrictContext, useLatest
-shared/lib/dialogs   DialogsHost, useDialogs, useConfirm  (реализация в app)
-shared/lib/toast     useToast                              (реализация в app)
+shared/lib/dialogs   DialogsHost, useDialogs, useConfirm  (implemented in app)
+shared/lib/toast     useToast                              (implemented in app)
 entities/task        Task, taskQueries, useCreateTask, useDeleteTask
-entities/board       Board(DTO→модель), boardQueries, useSaveBoard, isBoardMember
-features/edit-task   диалог редактирования задачи
-features/task-board  kanban: колонки, карточки, drag&drop
-pages/board          экран: собирает всё вместе
+entities/board       Board(DTO→model), boardQueries, useSaveBoard, isBoardMember
+features/edit-task   task editing dialog
+features/task-board  kanban: columns, cards, drag&drop
+pages/board          the screen: puts everything together
 ```
 
-Проблема: `features/task-board` должна создавать задачи (`entities/task` —
-можно импортировать, это ниже) и открывать диалог из `features/edit-task`
-(тот же слой — **нельзя**). Кроме того, фича доски полезна сама по себе: её
-можно переиспользовать для доски, где карточки — не задачи, а, например,
-кандидаты в найме. Поэтому она не должна знать про `Task` вовсе.
+The problem: `features/task-board` must create tasks (`entities/task` — may be
+imported, it's below) and open a dialog from `features/edit-task` (the same
+layer — **not allowed**). Besides, the board feature is useful on its own: it
+can be reused for a board where cards aren't tasks but, say, hiring candidates.
+So it shouldn't know about `Task` at all.
 
 ---
 
-## 2. Ступень 1 — пропсы, аргументы, колбэки
+## 2. Rung 1 — props, arguments, callbacks
 
-Самая простая и самая частая форма DI. Начинай всегда с неё.
+The simplest and most common form of DI. Always start here.
 
 ```tsx
 // features/sign-in/ui/sign-in-form.tsx
-// Фича не знает про роутер (он в app) и не решает, куда вести после входа.
+// The feature doesn't know about the router (it's in app) and doesn't decide where to go after sign-in.
 type SignInFormProps = { onSuccess: (session: Session) => void };
 
 export function SignInForm({ onSuccess }: SignInFormProps) {
@@ -73,7 +73,7 @@ export function SignInPage() {
 }
 ```
 
-Функции — то же самое: правило передаётся аргументом, а не импортируется.
+Same for functions: a rule is passed as an argument, not imported.
 
 ```ts
 // features/edit-task/model/assignee.ts
@@ -85,21 +85,20 @@ export function getAssigneeOptions(
 }
 ```
 
-**Используй, когда** зависимость нужна на 1–2 уровня вниз. Проброс через
-3+ компонента, которым она не нужна (prop drilling), — сигнал перейти на
-ступень 2 или 3.
+**Use when** the dependency is needed 1–2 levels down. Passing it through 3+
+components that don't need it (prop drilling) is a signal to move to rung 2 or 3.
 
 ---
 
-## 3. Ступень 2 — композиция: children и render props
+## 3. Rung 2 — composition: children and render props
 
-Когда модулю нужно **показать** чужой UI внутри себя, он оставляет «дырку»,
-а страница её заполняет.
+When a module needs to **show** someone else's UI inside itself, it leaves a
+"hole", and the page fills it.
 
 ```tsx
 // features/task-board/ui/task-board.tsx
 type TaskBoardProps = {
-  /** Дополнительные действия на карточке — их даёт тот, кто собирает экран. */
+  /** Extra actions on a card — provided by whoever assembles the screen. */
   renderCardActions?: (card: BoardCard) => ReactNode;
 };
 
@@ -109,27 +108,27 @@ type TaskBoardProps = {
 />
 ```
 
-Варианты той же идеи: `children`, именованные слоты-пропсы
-(`header`, `footer`, `emptyState`), compound components
-(`<Dialog.Title/>`). Модуль `task-board` ничего не знает про `track-time`.
+Variants of the same idea: `children`, named slot props (`header`, `footer`,
+`emptyState`), compound components (`<Dialog.Title/>`). The `task-board`
+module knows nothing about `track-time`.
 
 ---
 
-## 4. Ступень 3 — контракт `deps` + strict context
+## 4. Rung 3 — a `deps` contract + strict context
 
-Когда зависимость нужна глубоко в дереве или нескольким компонентам/хукам
-слайса, пропсы превращаются в шум. Тогда слайс объявляет **контракт** и
-получает реализацию через контекст.
+When a dependency is needed deep in the tree or by several components/hooks of
+the slice, props become noise. Then the slice declares a **contract** and gets
+the implementation through context.
 
-### 4.1. Утилита strict context (shared)
+### 4.1. Strict context utility (shared)
 
 ```ts
 // shared/lib/react/strict-context.ts
 import { createContext, useContext, type Provider } from "react";
 
 /**
- * Контекст без значения по умолчанию. Если провайдера нет — ошибка сразу,
- * а не тихий undefined где-то в глубине.
+ * A context without a default value. If the provider is missing — an error
+ * right away, not a silent undefined somewhere deep down.
  */
 export function createStrictContext<T>(name: string) {
   const Context = createContext<T | null>(null);
@@ -147,15 +146,15 @@ export function createStrictContext<T>(name: string) {
 }
 ```
 
-### 4.2. Контракт объявляет потребитель
+### 4.2. The consumer declares the contract
 
 ```ts
 // features/edit-task/model/deps.ts
 import { createStrictContext } from "@/shared/lib/react";
 
-/** Что фиче редактирования задачи нужно от внешнего мира. */
+/** What the task editing feature needs from the outside world. */
 export type EditTaskDeps = {
-  /** Можно ли назначить пользователя исполнителем. Правило — снаружи. */
+  /** Whether the user can be made the assignee. The rule comes from outside. */
   canAssignUser: (userId: string) => boolean;
 };
 
@@ -164,7 +163,7 @@ export const [EditTaskDepsProvider, useEditTaskDeps] =
 ```
 
 ```tsx
-// features/edit-task/ui/assignee-field.tsx — компонент глубоко внутри формы
+// features/edit-task/ui/assignee-field.tsx — a component deep inside the form
 export function AssigneeField({ control }: { control: Control<TaskFormValues> }) {
   const { canAssignUser } = useEditTaskDeps();
   const users = useUsers();
@@ -173,35 +172,35 @@ export function AssigneeField({ control }: { control: Control<TaskFormValues> })
 }
 ```
 
-Фича не знает, что правило назначения на этом экране — «участник доски».
-На другом экране правило может быть другим — фича не изменится.
+The feature doesn't know that on this screen the assignment rule is "board
+member". On another screen the rule may differ — the feature won't change.
 
-### 4.3. Правила контракта
+### 4.3. Contract rules
 
-- **Термины потребителя.** `task-board` говорит `BoardCard`, а не `Task`.
-- **Минимальность.** Только то, что вызывается. `canAssignUser`, а не
-  «весь объект доски» и не «весь стор пользователей».
-- **Функции, а не объекты-сервисы.** `createCard(input)` проще подменить и
-  адаптировать, чем `cardService` с десятью методами.
-- **Отмена — значение, ошибка — исключение.** `editCard` возвращает
-  `BoardCard | null`; `null` — пользователь закрыл диалог.
-- **Документируй семантику** JSDoc-комментарием, если она не очевидна из
-  типа (кто отвечает за подтверждение, что значит `null`, идемпотентность).
-- **Провайдер — часть public API** слайса (экспортируется из `index.ts`),
-  хук-потребитель — внутренний.
+- **The consumer's terms.** `task-board` says `BoardCard`, not `Task`.
+- **Minimal.** Only what is called. `canAssignUser`, not "the whole board
+  object" or "the whole users store".
+- **Functions, not service objects.** `createCard(input)` is easier to replace
+  and adapt than a `cardService` with ten methods.
+- **Cancellation is a value, an error is an exception.** `editCard` returns
+  `BoardCard | null`; `null` means the user closed the dialog.
+- **Document the semantics** with a JSDoc comment if they aren't obvious from
+  the type (who handles confirmation, what `null` means, idempotency).
+- **The provider is part of the slice's public API** (exported from
+  `index.ts`); the consumer hook is internal.
 
 ---
 
-## 5. Ступень 4 — фабрика стора/сервиса с зависимостями
+## 5. Rung 4 — a store/service factory with dependencies
 
-Нереактивная логика (стор, use-case, сервис) получает зависимости
-**аргументом фабрики**, а не импортом. Это делает её тестируемой обычным
-unit-тестом — без React, без сети, без `vi.mock`.
+Non-reactive logic (a store, use case, service) receives dependencies **as a
+factory argument**, not via import. That makes it testable with a plain unit
+test — no React, no network, no `vi.mock`.
 
-### 5.1. Чистое ядро
+### 5.1. Pure core
 
 ```ts
-// features/task-board/model/board.ts — только данные на вход и выход
+// features/task-board/model/board.ts — only data in and out
 export type BoardCard = { id: string; title: string; assigneeId?: string };
 export type BoardColumn = { id: string; title: string; cards: BoardCard[] };
 export type Board = { id: string; columns: BoardColumn[] };
@@ -218,7 +217,7 @@ export function addCard(board: Board, columnId: string, card: BoardCard): Board 
   };
 }
 
-/** Перемещает карточку по id (не по индексу — список может быть отфильтрован). */
+/** Moves a card by id (not by index — the list may be filtered). */
 export function moveCard(board: Board, cardId: string, to: CardTarget): Board {
   const card = findCard(board, cardId);
   if (!card) throw new Error(`moveCard: card "${cardId}" not found`);
@@ -235,16 +234,16 @@ export function moveCard(board: Board, cardId: string, to: CardTarget): Board {
   };
 }
 
-// replaceCard, removeCard, findCard — аналогично
+// replaceCard, removeCard, findCard — similarly
 ```
 
-### 5.2. Контракт фичи и фабрика
+### 5.2. The feature's contract and factory
 
 ```ts
 // features/task-board/model/deps.ts
 export type TaskBoardDeps = {
   createCard: (input: { title: string }) => Promise<BoardCard>;
-  /** Открывает редактор карточки. null — пользователь отменил. */
+  /** Opens the card editor. null — the user cancelled. */
   editCard: (cardId: string) => Promise<BoardCard | null>;
   deleteCard: (cardId: string) => Promise<void>;
   saveBoard: (board: Board) => Promise<void>;
@@ -268,12 +267,12 @@ export type BoardState = {
 export type BoardStore = ReturnType<typeof createBoardStore>;
 
 /**
- * getDeps, а не deps: стор живёт дольше одного рендера, а реализации
- * зависимостей (замыкания на свежие данные) могут меняться. См. раздел 10.
+ * getDeps, not deps: the store outlives a single render, and the dependency
+ * implementations (closures over fresh data) may change. See section 10.
  */
 export function createBoardStore(initial: Board, getDeps: () => TaskBoardDeps) {
   return createStore<BoardState>()((set, get) => {
-    /** Оптимистично применяет изменение; при ошибке откатывает и пробрасывает. */
+    /** Applies a change optimistically; on error rolls back and rethrows. */
     async function commit(next: Board, persist: () => Promise<void>) {
       const previous = get().board;
       set({ board: next });
@@ -314,13 +313,13 @@ export function createBoardStore(initial: Board, getDeps: () => TaskBoardDeps) {
 }
 ```
 
-Обрати внимание, чего в сторе **нет**:
-- импорта `api`, роутера, toast, confirm, i18n;
-- текстов для пользователя;
-- решения «спросить подтверждение» и «как показать ошибку» — это UX,
-  он принадлежит хуку/компоненту (5.4).
+Note what the store **doesn't** have:
+- imports of `api`, the router, toast, confirm, i18n;
+- user-facing copy;
+- the decisions "ask for confirmation" and "how to show the error" — that's
+  UX, and it belongs to the hook/component (5.4).
 
-### 5.3. Провайдер: экземпляр на поддерево
+### 5.3. Provider: an instance per subtree
 
 ```tsx
 // shared/lib/react/use-latest.ts
@@ -346,7 +345,7 @@ type TaskBoardProviderProps = {
   children: ReactNode;
 };
 
-/** Используй с key={board.id}: другой board — другой экземпляр стора. */
+/** Use with key={board.id}: a different board — a different store instance. */
 export function TaskBoardProvider({ initialBoard, deps, children }: TaskBoardProviderProps) {
   const depsRef = useLatest(deps);
   const [store] = useState(() =>
@@ -360,18 +359,18 @@ export function useBoardStore<T>(selector: (state: BoardState) => T): T {
 }
 ```
 
-Здесь `deps` приходят **пропсом** провайдера (ступень 1), а не отдельным
-контекстом: компонентам внутри фичи deps напрямую не нужны, им нужен стор.
-Отдельный deps-контекст (ступень 3) заводи, только когда хукам/компонентам
-нужны зависимости, не проходящие через стор.
+Here `deps` come in as a provider **prop** (rung 1), not as a separate
+context: components inside the feature don't need deps directly, they need
+the store. Add a separate deps context (rung 3) only when hooks/components
+need dependencies that don't go through the store.
 
-### 5.4. UX-решения — в хуке слайса
+### 5.4. UX decisions live in the slice's hook
 
 ```ts
 // features/task-board/model/use-remove-card.ts
 export function useRemoveCard() {
   const removeCard = useBoardStore((state) => state.removeCard);
-  const confirm = useConfirm();   // shared/lib/dialogs — импорт вниз, DI не нужен
+  const confirm = useConfirm();   // shared/lib/dialogs — a downward import, no DI needed
   const toast = useToast();       // shared/lib/toast
   const { t } = useI18n();
 
@@ -392,17 +391,16 @@ export function useRemoveCard() {
 }
 ```
 
-Подтверждение — ровно в одном месте. Стор при этом остаётся чистым и
-тестируется без диалогов.
+Confirmation happens in exactly one place. The store stays pure and is tested
+without dialogs.
 
 ---
 
-## 6. Сборка на странице: адаптер
+## 6. Wiring on the page: the adapter
 
-Страница — единственное место, которое видит и `task-board`, и
-`edit-task`, и сущности. Связывание оформляется **хуком-адаптером** в
-`model/` страницы: так JSX страницы остаётся читаемым, а адаптер можно
-протестировать отдельно.
+The page is the only place that sees `task-board`, `edit-task` and the
+entities. Wiring is done in an **adapter hook** in the page's `model/`: that
+keeps the page's JSX readable, and the adapter can be tested separately.
 
 ```ts
 // pages/board/model/use-task-board-adapter.ts
@@ -462,46 +460,46 @@ function BoardScreen({ board }: { board: Board }) {
 }
 ```
 
-Что здесь важно:
-- маппинг `Task → BoardCard` и `Board(entity) → Board(feature)` живёт в
-  адаптере, фичи друг о друге не знают;
-- бизнес-правило «назначать можно только участников доски» взято из
-  сущности (`isBoardMember`) — оно описано один раз;
-- `key={boardId}` гарантирует новый экземпляр стора при смене доски.
+What matters here:
+- the `Task → BoardCard` and `Board(entity) → Board(feature)` mappings live in
+  the adapter; the features don't know about each other;
+- the business rule "only board members can be assigned" comes from the
+  entity (`isBoardMember`) — it's described once;
+- `key={boardId}` guarantees a new store instance when the board changes.
 
 ---
 
-## 7. Глобальные сервисы: confirm, toast, navigate, i18n, время, id
+## 7. Global services: confirm, toast, navigate, i18n, time, id
 
-Сервисы, нужные всему приложению, устроены как **порт в `shared` +
-реализация в `app`**:
+Services needed by the whole app are built as **a port in `shared` + an
+implementation in `app`**:
 
 ```text
-shared/lib/toast/      тип ToastApi, ToastProvider (strict context), useToast
-app/providers/         <ToastProvider value={implementation}> + отрисовка тостов
+shared/lib/toast/      ToastApi type, ToastProvider (strict context), useToast
+app/providers/         <ToastProvider value={implementation}> + rendering toasts
 ```
 
-- Слайсы импортируют `useToast()` из `shared` напрямую — это импорт вниз.
-- Реализацию подключает `app`; в тестах — тестовый провайдер с фейком.
-- Нереактивной логике (сторы, сервисы) эти сервисы **не нужны**: UX-решения
-  принимаются в хуках (5.4). Если всё же нужны — передай функцией в deps.
+- Slices import `useToast()` from `shared` directly — it's a downward import.
+- `app` plugs in the implementation; in tests — a test provider with a fake.
+- Non-reactive logic (stores, services) **doesn't need** these services: UX
+  decisions are made in hooks (5.4). If it does need them, pass a function in deps.
 
-**Время, id, random** — тоже зависимости. Если логика зависит от «сейчас»
-или генерирует id, а результат проверяется в тесте, передавай
-`now: () => Date` / `createId: () => string` в фабрику или функцию, а не
-вызывай `Date.now()` / `nanoid()` внутри.
+**Time, ids, random** are dependencies too. If logic depends on "now" or
+generates ids, and the result is checked in a test, pass
+`now: () => Date` / `createId: () => string` into the factory or function
+instead of calling `Date.now()` / `nanoid()` inside.
 
-**Навигация** — не зависимость фич вовсе: фича сообщает о результате
-(колбэк `onSuccess`, возвращаемый Promise), а куда переходить — решает
-страница.
+**Navigation** is not a feature dependency at all: the feature reports the
+result (an `onSuccess` callback, a returned Promise), and the page decides
+where to go.
 
 ---
 
-## 8. Promise-диалоги
+## 8. Promise dialogs
 
-Диалог как асинхронная функция: `const task = await openEditTask(id)`.
-Это превращает «открыть модалку, дождаться результата, продолжить» в
-линейный код и отлично сочетается с контрактами `deps`.
+A dialog as an async function: `const task = await openEditTask(id)`. This
+turns "open a modal, wait for the result, continue" into linear code and fits
+`deps` contracts perfectly.
 
 ```tsx
 // shared/lib/dialogs/dialogs.tsx
@@ -513,7 +511,7 @@ export { useDialogs };
 
 let nextDialogId = 0;
 
-/** Монтируется один раз в app. */
+/** Mounted once in app. */
 export function DialogsHost({ children }: { children: ReactNode }) {
   const [dialogs, setDialogs] = useState<{ id: number; node: ReactNode }[]>([]);
 
@@ -546,8 +544,8 @@ export function useEditTaskDialog() {
   return useCallback(
     (taskId: string, deps: EditTaskDeps) =>
       open<Task | null>((resolve) => (
-        // Диалог рендерится в DialogsHost (в app), а не там, где его открыли:
-        // контексты страницы ему НЕ видны. Поэтому deps передаются явно.
+        // The dialog is rendered in DialogsHost (in app), not where it was opened:
+        // the page's contexts are NOT visible to it. So deps are passed explicitly.
         <EditTaskDepsProvider value={deps}>
           <EditTaskDialog
             taskId={taskId}
@@ -561,85 +559,85 @@ export function useEditTaskDialog() {
 }
 ```
 
-`useConfirm()` строится поверх `useDialogs()` так же и возвращает
+`useConfirm()` is built on top of `useDialogs()` the same way and returns a
 `Promise<boolean>`.
 
 ---
 
-## 9. «Изменилось там — обнови здесь»
+## 9. "Changed there — update here"
 
-Слайсам часто нужно реагировать на изменения в других слайсах. Варианты в
-порядке предпочтения:
+Slices often need to react to changes in other slices. Options in order of
+preference:
 
-1. **Общий кэш серверных данных.** Мутация инвалидирует ключи запросов
-   (`taskQueries.all()`), все подписчики обновятся сами. Слайсы не знают
-   друг о друге. Покрывает большинство случаев.
-2. **Колбэк / возвращаемое значение.** `onSaved(task)`, `await editCard()` —
-   инициатор узнаёт результат и сам обновляет то, чем владеет.
-3. **Колбэк в контракте `deps`.** `onBoardChanged?: () => void` — страница
-   решает, кого уведомить.
-4. **Шина событий / realtime.** Только для действительно глобальных или
-   внешних событий (websocket «доску изменил другой пользователь»).
-   Транспорт — в `shared/api`; подписка — в хуке слайса, который владеет
-   реакцией; имена и payload событий типизированы.
+1. **A shared server data cache.** A mutation invalidates query keys
+   (`taskQueries.all()`), and all subscribers update themselves. The slices
+   don't know about each other. Covers most cases.
+2. **A callback / return value.** `onSaved(task)`, `await editCard()` — the
+   initiator learns the result and updates what it owns.
+3. **A callback in the `deps` contract.** `onBoardChanged?: () => void` — the
+   page decides whom to notify.
+4. **An event bus / realtime.** Only for truly global or external events (a
+   websocket "another user changed the board"). The transport lives in
+   `shared/api`; the subscription — in the hook of the slice that owns the
+   reaction; event names and payloads are typed.
 
-Не используй глобальную шину для связи двух компонентов одного экрана:
-связь становится неявной, порядок обработки — непредсказуемым.
+Don't use a global bus to connect two components on the same screen: the
+connection becomes implicit and the handling order unpredictable.
 
 ---
 
-## 10. Ловушки
+## 10. Pitfalls
 
-**Устаревшие зависимости в долгоживущем сторе.** Стор создаётся один раз
-(`useState(() => create...)`), а адаптер на каждом рендере возвращает новые
-функции, замкнутые на свежие данные. Если передать фабрике `deps` объектом,
-стор навсегда запомнит первый вариант. Решение — `getDeps` + `useLatest`
+**Stale dependencies in a long-lived store.** The store is created once
+(`useState(() => create...)`), while the adapter returns new functions on every
+render, closed over fresh data. If you pass `deps` to the factory as an object,
+the store remembers the first version forever. Solution — `getDeps` + `useLatest`
 (5.3).
 
-**Нестабильные deps в контексте → лишние ререндеры.** Если deps кладутся в
-контекст (ступень 3), а не в ref, мемоизируй объект (`useMemo`) или держи
-функции стабильными (`useCallback`), иначе каждый рендер страницы
-перерисует всех потребителей.
+**Unstable deps in context → extra re-renders.** If deps are put in context
+(rung 3) rather than a ref, memoize the object (`useMemo`) or keep the
+functions stable (`useCallback`), otherwise every page render re-renders all
+consumers.
 
-**Контекст, невидимый из портала-хоста.** Всё, что рендерится в глобальном
-хосте (диалоги, тосты), видит только провайдеры `app`. Передавай нужное
-явно (раздел 8).
+**Context invisible from a portal host.** Everything rendered in a global host
+(dialogs, toasts) sees only the `app` providers. Pass what's needed explicitly
+(section 8).
 
-**Смена сущности без смены стора.** Переход с `/board/1` на `/board/2`
-переиспользует компонент и стор со старыми данными. Используй `key`.
+**Changing the entity without changing the store.** Navigating from `/board/1`
+to `/board/2` reuses the component and the store with the old data. Use `key`.
 
-**Порядок провайдеров.** Провайдер, использующий контекст, должен быть
-внутри провайдера этого контекста. Strict context покажет ошибку сразу —
-не глуши её дефолтным значением.
+**Provider order.** A provider that uses a context must be inside that
+context's provider. Strict context shows the error right away — don't silence
+it with a default value.
 
-**Контракт в терминах поставщика.** `deps.updateTask(task: Task)` внутри
-`task-board` — та же связанность, что и cross-import, только скрытая.
+**A contract in the provider's terms.** `deps.updateTask(task: Task)` inside
+`task-board` is the same coupling as a cross-import, only hidden.
 
-**Божественный контракт.** 15 функций в deps — признак, что слайс делает
-слишком много или что часть зависимостей на самом деле — импорт вниз.
+**A god contract.** 15 functions in deps is a sign that the slice does too much
+or that some dependencies are actually downward imports.
 
-**DI ради DI.** Контекст для значения, которое нужно одному дочернему
-компоненту, — лишняя косвенность. Пропс.
+**DI for DI's sake.** Context for a value needed by one child component is
+needless indirection. Use a prop.
 
-**Скрытый синглтон.** `import { api } from "@/shared/api"` внутри фабрики
-стора делает зависимость невидимой и требует `vi.mock`. Внутри React-хуков
-импорт запросов из `entities`/`shared` нормален (тестируется через MSW), а в
-фабриках и чистых функциях — нет.
+**A hidden singleton.** `import { api } from "@/shared/api"` inside a store
+factory makes the dependency invisible and requires `vi.mock`. Inside React
+hooks, importing queries from `entities`/`shared` is fine (tested via MSW), but
+not in factories and pure functions.
 
-**Повторение побочного эффекта.** Если и хук, и стор показывают confirm —
-пользователь увидит два диалога. У каждого эффекта ровно один владелец.
+**A repeated side effect.** If both the hook and the store show a confirm, the
+user sees two dialogs. Every effect has exactly one owner.
 
 ---
 
-## 11. Чек-лист
+## 11. Checklist
 
-- [ ] Выбрана самая нижняя достаточная ступень (пропс → композиция →
-      контекст → фабрика).
-- [ ] Контракт объявлен потребителем, в его терминах, минимален,
-      задокументирован там, где семантика неочевидна.
-- [ ] Связывание и маппинг типов — в адаптере страницы (или `app`).
-- [ ] Нереактивная логика получает зависимости аргументом (`getDeps`), а
-      не импортом; в ней нет UX-решений и текстов.
-- [ ] Для контракта есть фейк в `testing.ts`.
-- [ ] Провайдеры строгие; долгоживущие экземпляры пересоздаются по `key`.
-- [ ] У каждого побочного эффекта ровно один владелец.
+- [ ] The lowest sufficient rung is chosen (prop → composition → context →
+      factory).
+- [ ] The contract is declared by the consumer, in its terms, minimal,
+      documented where the semantics aren't obvious.
+- [ ] Wiring and type mapping are in the page's adapter (or `app`).
+- [ ] Non-reactive logic gets dependencies as an argument (`getDeps`), not via
+      import; it has no UX decisions or copy.
+- [ ] The contract has a fake in `testing.ts`.
+- [ ] Providers are strict; long-lived instances are recreated by `key`.
+- [ ] Every side effect has exactly one owner.
