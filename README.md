@@ -61,28 +61,29 @@ Then:
 
 ## Scripts
 
-| Command       | What it does                                                    |
-| ------------- | --------------------------------------------------------------- |
-| `pnpm dev`    | Dev server on :3000                                             |
-| `pnpm check`  | Linter, types (`next typegen && tsc`), unit and component tests |
-| `pnpm e2e`    | Builds production, serves it on :3100, runs Playwright          |
-| `pnpm format` | Prettier                                                        |
-| `pnpm build`  | Production build                                                |
+| Command       | What it does                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| `pnpm dev`    | Dev server on :3000                                                                        |
+| `pnpm check`  | Linter, types (`next typegen && tsc`), unit and component tests, tests of `.claude/hooks/` |
+| `pnpm e2e`    | Builds production, serves it on :3100, runs Playwright                                     |
+| `pnpm format` | Prettier                                                                                   |
+| `pnpm build`  | Production build                                                                           |
 
 Before the first `pnpm e2e` on a machine: `pnpm exec playwright install chromium`.
 
 ## Agent layer
 
-| File                                                                    | Why                                                                                                                                     |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `AGENTS.md` (+ `CLAUDE.md`, which imports it)                           | Read at the start of every session: commands, map, 9 rules, process. Short on purpose — only what is always needed                      |
-| `app/`, `src/shared/api/`, `src/shared/config/` — their own `AGENTS.md` | Domain rules, loaded when the agent works in that folder                                                                                |
-| `.claude/skills/`                                                       | `fsd-frontend`, `feature-workflow`, `anti-slop-review`, `frontend-auth-session`, `adr-writer`, `frontend-bootstrap`                     |
-| `.claude/agents/reviewer.md`                                            | Subagent for independent review: clean context, diff, criteria from the PRD                                                             |
-| `.claude/settings.json`                                                 | Runs git reads and `pnpm` checks without prompts. Denies `--output`, `--ext-diff`, `--textconv`: they write files or run commands       |
-| `docs/features/_template/`                                              | PRD, spec, tasks — feature state lives in files, not in the chat                                                                        |
-| `docs/adr/`                                                             | ADR template and ADR-0001 with the template's decisions                                                                                 |
-| Next.js block in `AGENTS.md`                                            | Added and updated by `next dev`: points the agent to the docs of the installed version in `node_modules/next/dist/docs/`. Do not remove |
+| File                                                                    | Why                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md` (+ `CLAUDE.md`, which imports it)                           | Read at the start of every session: commands, map, 9 rules, process. Short on purpose — only what is always needed                                                                                                                                 |
+| `app/`, `src/shared/api/`, `src/shared/config/` — their own `AGENTS.md` | Domain rules, loaded when the agent works in that folder                                                                                                                                                                                           |
+| `.claude/skills/`                                                       | `fsd-frontend`, `feature-workflow`, `anti-slop-review`, `frontend-auth-session`, `adr-writer`, `frontend-bootstrap`                                                                                                                                |
+| `.claude/agents/reviewer.md`                                            | Subagent for independent review: clean context, diff, criteria from the PRD                                                                                                                                                                        |
+| `.claude/settings.json`                                                 | Runs git reads and `pnpm` checks without prompts. Denies `--output`, `--ext-diff`, `--textconv`: they write files or run commands                                                                                                                  |
+| `.claude/hooks/guard-bash.mjs`                                          | Blocks `--no-verify`, `git commit -n`, `HUSKY=0` and `core.hooksPath` in the agent's Bash commands written in the usual form. Catches an accidental skip of the git hooks, not a deliberate one; the forms it doesn't check are listed in the hook |
+| `docs/features/_template/`                                              | PRD, spec, tasks — feature state lives in files, not in the chat                                                                                                                                                                                   |
+| `docs/adr/`                                                             | ADR template and ADR-0001 with the template's decisions                                                                                                                                                                                            |
+| Next.js block in `AGENTS.md`                                            | Added and updated by `next dev`: points the agent to the docs of the installed version in `node_modules/next/dist/docs/`. Do not remove                                                                                                            |
 
 Feature process (`feature-workflow`): PRD with Non-Goals → spec up to 150 lines → tasks,
 one per commit → read-only research → tracer bullet → test first for logic → review by a

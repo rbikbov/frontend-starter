@@ -6,12 +6,12 @@ of every session, so it holds only what is always needed. Details live in folder
 
 ## Commands
 
-| What                  | Command                                                  |
-| --------------------- | -------------------------------------------------------- |
-| Development           | `pnpm dev`                                               |
-| Check before a commit | `pnpm check` — lint, typecheck, unit and component tests |
-| e2e                   | `pnpm e2e` — builds production and serves it on :3100    |
-| Formatting            | `pnpm format`                                            |
+| What                  | Command                                                              |
+| --------------------- | -------------------------------------------------------------------- |
+| Development           | `pnpm dev`                                                           |
+| Check before a commit | `pnpm check` — lint, typecheck, unit and component tests, hook tests |
+| e2e                   | `pnpm e2e` — builds production and serves it on :3100                |
+| Formatting            | `pnpm format`                                                        |
 
 Do not claim checks pass until you have run them. In test and linter output, read the
 errors, not the whole log.

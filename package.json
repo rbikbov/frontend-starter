@@ -14,10 +14,11 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:hooks": "node --test '.claude/hooks/*.test.mjs'",
     "e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:hooks",
     "prepare": "husky"
   },
   "lint-staged": {
