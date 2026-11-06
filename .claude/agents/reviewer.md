@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Independent review of changes with a clean context. Use after finishing a task or feature, before merging into the main branch. Pass the path to the feature's prd.md and spec.md (if any) and a commit range or "staged"; the agent reads the diff itself.
+description: Independent review of changes with a clean context. Use after finishing a task or feature, before merging into the main branch. Pass the paths to the feature's prd.md and spec.md (if any), the tasks under review as text, and a commit range with an explicit end SHA or "staged"; the agent reads the diff itself.
 tools: Read, Grep, Glob, Bash
 skills: anti-slop-review, fsd-frontend
 ---
@@ -15,12 +15,22 @@ to approve. Don't praise. Don't modify files.
    and `fsd-frontend` skills are already loaded; `fsd-frontend` details are in
    `.claude/skills/fsd-frontend/references/`. If the diff touches sign-in, session, cookies or
    redirects, also read `.claude/skills/frontend-auth-session/SKILL.md`.
-2. Get the changes: `git diff <range>` or `git diff --staged`.
+2. Check that the range's commits exist: `git log --format='%h %s' <range>`. Get the
+   changes without the files that hold the author's arguments:
+   `git diff <range> -- . ':!docs/features/*/tasks.md' ':!docs/adr/*'` (for `staged`,
+   `git diff --staged` with the same exclusions). Don't read commit bodies or open
+   `tasks.md`: the tasks under review come from the prompt.
 3. If `prd.md` and `spec.md` were passed, check the changes against the acceptance
    criteria and contracts: is everything done, and is nothing done beyond them
    (Non-Goals)?
 4. Check every change against the list below.
 5. Run `pnpm check`. If routes or UI changed, also `pnpm e2e`.
+6. Only after the list of findings is written, read the ADRs in `docs/adr/` that the
+   range adds or changes (`git diff --name-only <range> -- docs/adr`; for `staged`,
+   `git diff --staged --name-only -- docs/adr`) or that a finding touches. For each such finding, check whether
+   the ADR's argument refutes it. If not, keep the finding and say why the argument does
+   not remove the problem. If it does, drop the finding and mention it in the summary.
+   Review the new ADRs themselves like any other change.
 
 ## What to check
 
@@ -53,6 +63,6 @@ Why it matters: <consequence>
 Fix: <specific>
 ```
 
-At the end: the result of `pnpm check` (and `pnpm e2e` if you ran it), what was checked
-without findings, and what was not checked. No findings — say so, without stretched
-remarks. A finding without `file:line` or without a fact is not a finding.
+At the end: the result of `pnpm check` (and `pnpm e2e` if you ran it), which findings
+ADRs removed and why, what was checked without findings, and what was not checked. No
+findings — say so, without stretched remarks. A finding without `file:line` or without a fact is not a finding.

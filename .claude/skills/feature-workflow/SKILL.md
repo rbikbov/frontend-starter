@@ -33,7 +33,7 @@ sign-in and session — `frontend-auth-session`.
 | 4 | Research | log in `tasks.md` | — | Read-only; found what to reuse |
 | 5 | Tracer bullet | commit | — | One scenario works end to end and is visible in the browser |
 | 6 | Build | a commit per task | — | Test first for logic; `pnpm check` is green |
-| 7 | Review | `reviewer` report | human, on findings | Confirmed findings are fixed |
+| 7 | Review | `reviewer` report, shown in full | human, on each finding | The human's decisions on findings are done |
 | 8 | Browser | e2e for the critical path | — | PRD scenarios pass with no console errors |
 
 A small task (one commit, no new user-facing behavior) skips phases 1–3, but
@@ -119,11 +119,42 @@ One scenario end to end: route → page → feature or entity →
 
 ## 8. Review
 
-- The `reviewer` subagent (`.claude/agents/reviewer.md`) with a clean context:
-  pass the path to `prd.md` and `spec.md` and the commit range; it reads the
-  diff itself. The author sees their own mistakes worse: their context holds
-  the arguments for why the solution is right.
-- Confirmed findings are fixed; disputed ones are decided by the human.
+The `reviewer` subagent (`.claude/agents/reviewer.md`) with a clean context. The
+author sees their own mistakes worse: their context holds the arguments for why
+the solution is right. The subagent knows only what the prompt says, so the
+prompt decides how independent the review is.
+
+Pass **only**:
+
+- the paths to `prd.md` and `spec.md`;
+- the tasks under review as text, lines from `tasks.md` without the log; not the
+  path to `tasks.md`: the log holds the author's arguments;
+- what is not done yet (later tasks): their absence is not a finding;
+- the range `<base>..<sha>` with an explicit end SHA.
+
+Don't explain decisions, retell the implementation, list what was done, give
+assessments ("seems to work") or point to ADRs: the reviewer reads them itself
+after writing its findings.
+
+```text
+Review tasks <N–M> of <feature> (<the mechanism in one phrase>).
+
+- PRD: <path>. Spec: <path>.
+- Tasks under review:
+  <task lines from tasks.md>
+- Not done yet: <tasks>; their absence is not a finding unless these tasks
+  promised part of them.
+- Range: <base>..<sha> (branch <name>).
+
+Don't modify files. Answer in the format from your instructions.
+```
+
+- **Show the report to the human in full,** before your own fixes. Don't drop
+  findings as "unconfirmed" or sort them into accepted and rejected: the author
+  doesn't filter the review of their own code. You may add a fact to a finding
+  (a command, its output, a line of code); the human decides.
+- **Re-review** after fixes, only on the fix commits (`<last task commit>..<sha>`).
+  At most one re-review; remaining disputes are decided by the human.
 - **A human also reviews security:** sign-in, sessions, redirects, cookies,
   user input in HTML. Green checks don't guarantee it: in practice an open
   redirect passed the tests, and an unreadable error page passed the linter.
